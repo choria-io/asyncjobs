@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -82,6 +84,12 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 }
 
 func (c *Client) Run(ctx context.Context, router *Mux) error {
+	if c.opts.statsPort > 0 {
+		log.Printf("Exposing Prometheus metrics on port %d", c.opts.statsPort)
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(fmt.Sprintf(":%d", c.opts.statsPort), nil)
+	}
+
 	proc, err := newProcessor(c)
 	if err != nil {
 		return err
@@ -140,10 +148,12 @@ func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) erro
 	msg.Data = jt
 	ret, err := c.nc.RequestMsgWithContext(ctx, msg)
 	if err != nil {
+		taskUpdateErrorCounter.WithLabelValues().Inc()
 		return err
 	}
 	_, err = jsm.ParsePubAck(ret)
 	if err != nil {
+		taskUpdateErrorCounter.WithLabelValues().Inc()
 		return err
 	}
 
@@ -152,6 +162,7 @@ func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) erro
 	msg.Data = ji
 	ret, err = c.nc.RequestMsgWithContext(ctx, msg)
 	if err != nil {
+		enqueueErrorCounter.WithLabelValues(queue).Inc()
 		task.State = TaskStateQueueError
 		if err := c.saveTaskState(ctx, task); err != nil {
 			return err
@@ -161,12 +172,15 @@ func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) erro
 
 	_, err = jsm.ParsePubAck(ret) // TODO double check we actually handle whatever happens for duplicates etc
 	if err != nil {
+		enqueueErrorCounter.WithLabelValues(queue).Inc()
 		task.State = TaskStateQueueError
 		if err := c.saveTaskState(ctx, task); err != nil {
 			return err
 		}
 		return err
 	}
+
+	enqueueCounter.WithLabelValues(queue).Inc()
 
 	return nil
 }
@@ -206,15 +220,19 @@ func (c *Client) saveTaskState(ctx context.Context, t *Task) error {
 
 	resp, err := c.nc.RequestMsgWithContext(ctx, msg)
 	if err != nil {
+		taskUpdateErrorCounter.WithLabelValues().Inc()
 		return err
 	}
 
 	ack, err := jsm.ParsePubAck(resp)
 	if err != nil {
+		taskUpdateErrorCounter.WithLabelValues().Inc()
 		return err
 	}
 
 	t.seq = ack.Sequence
+
+	taskUpdateCounter.WithLabelValues().Inc()
 
 	return nil
 }

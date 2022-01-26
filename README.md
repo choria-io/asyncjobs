@@ -123,7 +123,7 @@ A completed task will look like this:
  * Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
  * Worker crashes does not impact the work queue
  * Handler interface (done) with middleware (planned)
- * Statistics via Prometheus (planned)
+ * Statistics via Prometheus using `PrometheusListenPort()`
  * Real time lifecycle events (planned)
 
 ### Storage

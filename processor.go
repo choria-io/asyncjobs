@@ -11,6 +11,7 @@ import (
 
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type processor struct {
@@ -72,6 +73,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 
 	if len(msg.Data) == 0 {
 		log.Printf("Invalid message: %#v", msg)
+		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
 		p.limiter <- struct{}{}
 		return
 	}
@@ -80,6 +82,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 	err := json.Unmarshal(msg.Data, item)
 	if err != nil || item.JobID == "" {
 		log.Printf("Invalid processor item: %q", msg.Data)
+		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
 		msg.Term() // data is corrupt so we terminate it, no associated job to update
 		p.limiter <- struct{}{}
 		return
@@ -87,6 +90,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
+		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(q.Name).Inc()
 		log.Printf("Loading task %q failed: %s", msg.Data, err)
 		p.limiter <- struct{}{}
 		return
@@ -107,6 +111,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 	}
 
 	if task.Deadline != nil && time.Since(*task.Deadline) < 0 {
+		workQueueEntryPastDeadlineCounter.WithLabelValues(q.Name).Inc()
 		log.Printf("Task %s is past its deadline of %v", task.ID, task.Deadline)
 		task.State = TaskStateExpired
 		err = p.c.saveTaskState(ctx, task)
@@ -138,8 +143,11 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 				return ctx.Err()
 			}
 
+			workQueuePollCounter.WithLabelValues(q.Name).Inc()
+
 			rj, err := json.Marshal(&api.JSApiConsumerGetNextRequest{Batch: 1, NoWait: true})
 			if err != nil {
+				workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
 				// TODO: log
 				time.Sleep(50 * time.Millisecond)
 				continue
@@ -149,6 +157,7 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 			resp, err := p.c.nc.RequestWithContext(rctx, q.nextSubj, rj)
 			cancel()
 			if err != nil {
+				workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
 				p.limiter <- struct{}{}
 				log.Printf("next msg failed: %v", err)
 				time.Sleep(50 * time.Millisecond)
@@ -191,8 +200,13 @@ func (p *processor) nakMsg(msg *nats.Msg) error {
 
 func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.Duration) {
 	defer func() {
+		handlersBusyGauge.WithLabelValues().Dec()
 		p.limiter <- struct{}{}
 	}()
+
+	obs := prometheus.NewTimer(handlerRunTimeSummary.WithLabelValues(t.Queue, t.Type))
+	defer obs.ObserveDuration()
+	handlersBusyGauge.WithLabelValues().Inc()
 
 	timeout, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
@@ -201,6 +215,7 @@ func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.
 
 	payload, err := p.mux.Handler(t)(timeout, t)
 	if err != nil {
+		handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()
 		log.Printf("Handling task %s failed: %s", t.ID, err)
 		err = p.c.handleTaskError(ctx, t, err)
 		if err != nil {
@@ -215,18 +230,14 @@ func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.
 		return
 	}
 
-	err = msg.Ack()
-	if err != nil {
-		err = p.c.handleTaskError(ctx, t, err)
-		if err != nil {
-			log.Printf("Acknowledging work item failed processing failed: %v", err)
-			return
-		}
-	}
-
 	err = p.c.setTaskSuccess(ctx, t, payload)
 	if err != nil {
 		log.Printf("Updating task after processing failed: %v", err)
-		return
+	}
+
+	// we try ack the thing anyway, hail mary to avoid a retry even if setTaskSuccess failed
+	err = msg.Ack()
+	if err != nil {
+		log.Printf("Acknowledging work item failed: %v", err)
 	}
 }

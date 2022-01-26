@@ -17,6 +17,7 @@ type ClientOpts struct {
 	taskDLQ       bool
 	retryPolicy   RetryPolicy
 	memoryStore   bool
+	statsPort     int
 	nc            *nats.Conn
 }
 
@@ -26,6 +27,18 @@ type ClientOpt func(opts *ClientOpts) error
 func NatsConn(nc *nats.Conn) ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.nc = nc
+		return nil
+	}
+}
+
+// PrometheusListenPort enables prometheus listening on a specific port
+func PrometheusListenPort(port int) ClientOpt {
+	return func(copts *ClientOpts) error {
+		if port == 0 {
+			return fmt.Errorf("port is required")
+		}
+
+		copts.statsPort = port
 		return nil
 	}
 }
