@@ -78,3 +78,11 @@ func (t *Task) init() {
 }
 
 type TaskOpt func(*Task) error
+
+// TaskDeadline sets an absolute time after which the task should not be handled
+func TaskDeadline(deadline time.Time) TaskOpt {
+	return func(t *Task) error {
+		t.Deadline = &deadline
+		return nil
+	}
+}

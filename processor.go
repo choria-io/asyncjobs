@@ -11,15 +11,15 @@ import (
 
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
-	"github.com/ripienaar/jsaj/backoff"
 )
 
 type processor struct {
-	queues  []*Queue
-	mux     *Mux
-	c       *Client
-	limiter chan struct{}
-	mu      sync.Mutex
+	queues      []*Queue
+	mux         *Mux
+	c           *Client
+	limiter     chan struct{}
+	retryPolicy RetryPolicy
+	mu          sync.Mutex
 }
 
 type ItemKind int
@@ -38,7 +38,11 @@ func newProcessItem(kind ItemKind, id string) ([]byte, error) {
 }
 
 func newProcessor(c *Client) (*processor, error) {
-	p := &processor{c: c, limiter: make(chan struct{}, c.opts.concurrency)}
+	p := &processor{
+		c:           c,
+		limiter:     make(chan struct{}, c.opts.concurrency),
+		retryPolicy: c.opts.retryPolicy,
+	}
 
 	// add it priority times to the list so a p1 would be processed once per cycle while a p10 10 times a cycle
 	for _, q := range c.opts.queues {
@@ -171,18 +175,17 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 }
 
 func (p *processor) nakMsg(msg *nats.Msg) error {
-	next := DefaultNakTime
+	var next time.Duration
+	// for when getting metadata fails, this ensures a delay with jitter
 	md, err := msg.Metadata()
 	if err == nil {
-		next = backoff.TwentySec.Duration(int(md.NumDelivered))
+		next = p.retryPolicy.Duration(int(md.NumDelivered) - 1)
+	} else {
+		next = p.retryPolicy.Duration(20)
 	}
 
-	delay, err := json.Marshal(&api.ConsumerNakOptions{Delay: next})
-	if err != nil {
-		delay = []byte(DefaultNakDelay)
-	}
-
-	resp := fmt.Sprintf("%s %s", api.AckNak, delay)
+	log.Printf("Delaying reprocessing by %v", next)
+	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
 	return msg.Respond([]byte(resp))
 }
 
@@ -203,6 +206,7 @@ func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.
 		if err != nil {
 			log.Printf("Updating task after failed processing failed: %v", err)
 		}
+
 		err = p.nakMsg(msg)
 		if err != nil {
 			log.Printf("NaK after failed processing failed: %v", err)

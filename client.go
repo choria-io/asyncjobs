@@ -21,11 +21,10 @@ const (
 	WorkStreamNamePattern    = "JSAJ_Q_%s" // individual work queues
 	WorkStreamSubjectPattern = "JSAJ.Q.%s"
 
-	DefaultJobRunTime = time.Hour
-	DefaultPriority   = 5
-	DefaultMaxTries   = 10
-	DefaultNakTime    = 10 * time.Second
-	DefaultNakDelay   = `{"delay":10000000000}`
+	DefaultJobRunTime         = time.Hour
+	DefaultPriority           = 5
+	DefaultMaxTries           = 10
+	DefaultQueueMaxConcurrent = 100
 )
 
 type Client struct {
@@ -38,11 +37,12 @@ type Client struct {
 	mu  sync.Mutex
 }
 
-func NewClient(nc *nats.Conn, opts ...ClientOpt) (*Client, error) {
+func NewClient(opts ...ClientOpt) (*Client, error) {
 	copts := &ClientOpts{
 		replicas:    1,
 		queues:      map[string]*Queue{},
 		concurrency: 10,
+		retryPolicy: RetryDefault,
 	}
 
 	for _, opt := range opts {
@@ -52,12 +52,16 @@ func NewClient(nc *nats.Conn, opts ...ClientOpt) (*Client, error) {
 		}
 	}
 
-	mgr, err := jsm.New(nc)
+	if copts.nc == nil {
+		return nil, fmt.Errorf("no NATS connection supplied")
+	}
+
+	mgr, err := jsm.New(copts.nc)
 	if err != nil {
 		return nil, err
 	}
 
-	c := &Client{mgr: mgr, nc: nc, opts: copts}
+	c := &Client{mgr: mgr, nc: copts.nc, opts: copts}
 
 	if len(c.opts.queues) == 0 {
 		log.Printf("Creating %s queue with no user defined queues set", defaultQueue.Name)
@@ -91,9 +95,14 @@ func (c *Client) setupStreams() error {
 
 	opts := []jsm.StreamOption{
 		jsm.Subjects(TasksStreamSubjects),
-		jsm.FileStorage(),
 		jsm.MaxMessagesPerSubject(1),
 		jsm.Replicas(c.opts.replicas),
+	}
+
+	if c.opts.memoryStore {
+		opts = append(opts, jsm.MemoryStorage())
+	} else {
+		opts = append(opts, jsm.FileStorage())
 	}
 
 	if c.opts.taskRetention > 0 {
@@ -249,23 +258,6 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, err error) error 
 func (c *Client) setupQueues() error {
 	for _, q := range c.opts.queues {
 		q.c = c
-
-		if q.Priority == 0 {
-			q.Priority = DefaultPriority
-		}
-
-		if q.Priority > 10 || q.Priority < 1 {
-			return fmt.Errorf("invalid priority %d on queue %s, must be between 1 and 10", q.Priority, q.Name)
-		}
-		if q.MaxTries == 0 {
-			q.MaxTries = DefaultMaxTries
-		}
-
-		if q.MaxRunTime == 0 {
-			q.MaxRunTime = DefaultJobRunTime
-		}
-
-		q.enqueueSubject = fmt.Sprintf(WorkStreamSubjectPattern, q.Name)
 
 		err := q.setupStreams()
 		if err != nil {

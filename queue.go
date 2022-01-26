@@ -9,13 +9,14 @@ import (
 )
 
 type Queue struct {
-	Name       string
-	MaxAge     time.Duration
-	MaxEntries int
-	DiscardOld bool // when MaxEntries is reached
-	Priority   int
-	MaxTries   int
-	MaxRunTime time.Duration
+	Name          string
+	MaxAge        time.Duration
+	MaxEntries    int
+	DiscardOld    bool // when MaxEntries is reached
+	Priority      int
+	MaxTries      int
+	MaxRunTime    time.Duration
+	MaxConcurrent int
 
 	taskS          *jsm.Stream
 	taskC          *jsm.Consumer
@@ -27,21 +28,44 @@ type Queue struct {
 }
 
 var defaultQueue = Queue{
-	Name:       "DEFAULT",
-	MaxRunTime: 5 * time.Second,
-	MaxTries:   2,
+	Name:          "DEFAULT",
+	MaxRunTime:    time.Minute,
+	MaxTries:      100,
+	MaxConcurrent: DefaultQueueMaxConcurrent,
 }
 
 func (q *Queue) setupStreams() error {
 	var err error
 
+	if q.Priority == 0 {
+		q.Priority = DefaultPriority
+	}
+
+	if q.Priority > 10 || q.Priority < 1 {
+		return fmt.Errorf("invalid priority %d on queue %s, must be between 1 and 10", q.Priority, q.Name)
+	}
+	if q.MaxTries == 0 {
+		q.MaxTries = DefaultMaxTries
+	}
+
+	if q.MaxRunTime == 0 {
+		q.MaxRunTime = DefaultJobRunTime
+	}
+
+	q.enqueueSubject = fmt.Sprintf(WorkStreamSubjectPattern, q.Name)
+
 	opts := []jsm.StreamOption{
 		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name)),
 		jsm.WorkQueueRetention(),
-		jsm.FileStorage(),
+
 		jsm.Replicas(q.c.opts.replicas),
 	}
 
+	if q.c.opts.memoryStore {
+		opts = append(opts, jsm.MemoryStorage())
+	} else {
+		opts = append(opts, jsm.FileStorage())
+	}
 	if q.MaxAge > 0 {
 		opts = append(opts, jsm.MaxAge(q.MaxAge))
 	}
@@ -50,6 +74,9 @@ func (q *Queue) setupStreams() error {
 	}
 	if q.DiscardOld {
 		opts = append(opts, jsm.DiscardOld())
+	}
+	if q.MaxConcurrent == 0 {
+		q.MaxConcurrent = DefaultQueueMaxConcurrent
 	}
 
 	q.taskS, err = q.c.mgr.LoadOrNewStream(fmt.Sprintf(WorkStreamNamePattern, q.Name), opts...)
@@ -60,7 +87,7 @@ func (q *Queue) setupStreams() error {
 	wopts := []jsm.ConsumerOption{
 		jsm.DurableName("WORKERS"),
 		jsm.AckWait(q.MaxRunTime),
-		jsm.MaxAckPending(uint(q.c.opts.concurrency)),
+		jsm.MaxAckPending(uint(q.MaxConcurrent)),
 		jsm.AcknowledgeExplicit(),
 		jsm.MaxDeliveryAttempts(q.MaxTries),
 	}
@@ -70,6 +97,9 @@ func (q *Queue) setupStreams() error {
 		return err
 	}
 	q.nextSubj = q.taskC.NextSubject()
+
+	// TODO: perhaps consolidate settings from stream back into queue so that
+	// binding to existing queues with wrong (or no) properties will function right
 
 	return nil
 }

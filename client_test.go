@@ -63,7 +63,7 @@ func withJetStream(t *testing.T, cb func(t *testing.T, nc *nats.Conn, mgr *jsm.M
 
 func TestClient(t *testing.T) {
 	withJetStream(t, func(t *testing.T, nc *nats.Conn, mgr *jsm.Manager) {
-		client, err := NewClient(nc, TaskStoreReplicas(1), TaskRetention(time.Hour))
+		client, err := NewClient(nc)
 		if err != nil {
 			t.Fatalf("client failed: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestClient(t *testing.T) {
 		testCount := 1000
 		firstID := ""
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
 		for i := 0; i < testCount; i++ {
