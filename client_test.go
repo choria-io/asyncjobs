@@ -125,7 +125,7 @@ func TestClient(t *testing.T) {
 		}
 		if task.State == TaskStateCompleted {
 			tj, _ := json.MarshalIndent(task, "", "  ")
-			fmt.Printf("Task: %s", string(tj))
+			fmt.Printf("Task: %s\n", string(tj))
 			fmt.Printf("%s task %s @ %s result: %q", task.State, task.ID, task.Result.CompletedAt, task.Result.Payload)
 		} else {
 			fmt.Printf("error task: %#v", task)

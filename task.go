@@ -2,7 +2,6 @@ package jsaj
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/segmentio/ksuid"
@@ -33,8 +32,7 @@ type Task struct {
 	Tries       int         `json:"tries"`
 	LastErr     string      `json:"last_err,omitempty"`
 
-	seq            uint64
-	enqueueSubject string
+	storageOptions interface{}
 }
 
 type TaskResult struct {
@@ -68,13 +66,7 @@ func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, erro
 		}
 	}
 
-	t.init()
-
 	return t, nil
-}
-
-func (t *Task) init() {
-	t.enqueueSubject = fmt.Sprintf(TasksStreamSubjectPattern, t.ID)
 }
 
 type TaskOpt func(*Task) error

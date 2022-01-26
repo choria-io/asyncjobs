@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// RetryPolicy defines a period that failed jobs will be retried against
 type RetryPolicy struct {
 	// Intervals is a range of time periods backoff will be based off
 	Intervals []time.Duration

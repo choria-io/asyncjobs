@@ -3,14 +3,11 @@ package jsaj
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/nats-io/jsm.go/api"
-	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -32,6 +29,8 @@ var (
 type ProcessItem struct {
 	Kind  ItemKind `json:"kind"`
 	JobID string   `json:"job"`
+
+	storageMeta interface{}
 }
 
 func newProcessItem(kind ItemKind, id string) ([]byte, error) {
@@ -65,25 +64,8 @@ func newProcessor(c *Client) (*processor, error) {
 	return p, nil
 }
 
-func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg) {
-	status := msg.Header.Get("Status")
-	if status == "404" || status == "409" {
-		return
-	}
-
-	if len(msg.Data) == 0 {
-		log.Printf("Invalid message: %#v", msg)
-		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
-		p.limiter <- struct{}{}
-		return
-	}
-
-	item := &ProcessItem{}
-	err := json.Unmarshal(msg.Data, item)
-	if err != nil || item.JobID == "" {
-		log.Printf("Invalid processor item: %q", msg.Data)
-		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
-		msg.Term() // data is corrupt so we terminate it, no associated job to update
+func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessItem) {
+	if item == nil {
 		p.limiter <- struct{}{}
 		return
 	}
@@ -91,7 +73,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
 		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(q.Name).Inc()
-		log.Printf("Loading task %q failed: %s", msg.Data, err)
+		log.Printf("Loading task %q failed: %s", item.JobID, err)
 		p.limiter <- struct{}{}
 		return
 	}
@@ -105,7 +87,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 
 	case TaskStateCompleted, TaskStateExpired:
 		log.Printf("Task %s is already %q", task.ID, task.State)
-		msg.Ack() // best efforts ok
+		p.c.storage.AckItem(ctx, item)
 		p.limiter <- struct{}{}
 		return
 	}
@@ -114,7 +96,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 		workQueueEntryPastDeadlineCounter.WithLabelValues(q.Name).Inc()
 		log.Printf("Task %s is past its deadline of %v", task.ID, task.Deadline)
 		task.State = TaskStateExpired
-		err = p.c.saveTaskState(ctx, task)
+		err = p.c.storage.SaveTaskState(ctx, task)
 		if err != nil {
 			log.Printf("Could not set task %s to expired state: %v", task.ID, err)
 		}
@@ -129,7 +111,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, msg *nats.Msg)
 		return
 	}
 
-	go p.handle(ctx, task, msg, q.taskC.AckWait())
+	go p.handle(ctx, task, item, q.MaxRunTime)
 }
 
 func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
@@ -145,28 +127,12 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 
 			workQueuePollCounter.WithLabelValues(q.Name).Inc()
 
-			rj, err := json.Marshal(&api.JSApiConsumerGetNextRequest{Batch: 1, NoWait: true})
+			item, err := p.c.storage.PollQueue(ctx, q)
 			if err != nil {
-				workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
-				// TODO: log
-				time.Sleep(50 * time.Millisecond)
-				continue
+				log.Printf("Polling queue %s failed: %v", q.Name, err)
 			}
 
-			rctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			resp, err := p.c.nc.RequestWithContext(rctx, q.nextSubj, rj)
-			cancel()
-			if err != nil {
-				workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
-				p.limiter <- struct{}{}
-				log.Printf("next msg failed: %v", err)
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-
-			if resp != nil {
-				p.processMessage(ctx, q, resp)
-			}
+			p.processMessage(ctx, q, item)
 
 			// TODO: this is grim, should be more intelligent here, either backoff when idle and speed up when there are messages
 			// or build something that does longer polls on a per queue basis but with sleeps based on the priority between polls
@@ -183,22 +149,7 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 	}
 }
 
-func (p *processor) nakMsg(msg *nats.Msg) error {
-	var next time.Duration
-	// for when getting metadata fails, this ensures a delay with jitter
-	md, err := msg.Metadata()
-	if err == nil {
-		next = p.retryPolicy.Duration(int(md.NumDelivered) - 1)
-	} else {
-		next = p.retryPolicy.Duration(20)
-	}
-
-	log.Printf("Delaying reprocessing by %v", next)
-	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
-	return msg.Respond([]byte(resp))
-}
-
-func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.Duration) {
+func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to time.Duration) {
 	defer func() {
 		handlersBusyGauge.WithLabelValues().Dec()
 		p.limiter <- struct{}{}
@@ -222,7 +173,7 @@ func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.
 			log.Printf("Updating task after failed processing failed: %v", err)
 		}
 
-		err = p.nakMsg(msg)
+		err = p.c.storage.NakItem(ctx, item)
 		if err != nil {
 			log.Printf("NaK after failed processing failed: %v", err)
 		}
@@ -236,7 +187,7 @@ func (p *processor) handle(ctx context.Context, t *Task, msg *nats.Msg, to time.
 	}
 
 	// we try ack the thing anyway, hail mary to avoid a retry even if setTaskSuccess failed
-	err = msg.Ack()
+	err = p.c.storage.AckItem(ctx, item)
 	if err != nil {
 		log.Printf("Acknowledging work item failed: %v", err)
 	}
