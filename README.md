@@ -80,6 +80,25 @@ client, _ := NewClient(NatsContext("WQ"))
 task, _ := client.LoadTaskByID("24ErgVol4ZjpoQ8FAima9R2jEHB")
 ```
 
+A completed task will look like this:
+
+```json
+{
+  "id": "24ErgVol4ZjpoQ8FAima9R2jEHB",
+  "type": "example",
+  "queue": "TEST",
+  "payload": "eyJoZWxsbyI6IndvcmxkIn0=",
+  "result": {
+    "payload": "ZG9uZQ==",
+    "completed": "2022-01-26T14:46:09.427182Z"
+  },
+  "state": "complete",
+  "created": "2022-01-26T14:46:09.232015Z",
+  "tried": "2022-01-26T14:46:09.427182Z",
+  "tries": 1
+}
+```
+
 ## Features
 
 ### Tasks

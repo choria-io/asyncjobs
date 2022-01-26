@@ -2,6 +2,7 @@ package jsaj
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -63,7 +64,7 @@ func withJetStream(t *testing.T, cb func(t *testing.T, nc *nats.Conn, mgr *jsm.M
 
 func TestClient(t *testing.T) {
 	withJetStream(t, func(t *testing.T, nc *nats.Conn, mgr *jsm.Manager) {
-		client, err := NewClient(nc)
+		client, err := NewClient(NatsConn(nc))
 		if err != nil {
 			t.Fatalf("client failed: %v", err)
 		}
@@ -123,6 +124,8 @@ func TestClient(t *testing.T) {
 			t.Fatalf("load failed: %v", err)
 		}
 		if task.State == TaskStateCompleted {
+			tj, _ := json.MarshalIndent(task, "", "  ")
+			fmt.Printf("Task: %s", string(tj))
 			fmt.Printf("%s task %s @ %s result: %q", task.State, task.ID, task.Result.CompletedAt, task.Result.Payload)
 		} else {
 			fmt.Printf("error task: %#v", task)
