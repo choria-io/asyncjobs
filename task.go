@@ -15,13 +15,13 @@ import (
 type TaskState string
 
 const (
-	TaskStateUnknown    = "unknown"
-	TaskStateNew        = "new"
-	TaskStateActive     = "active"
-	TaskStateRetry      = "retry"
-	TaskStateExpired    = "expired"
-	TaskStateCompleted  = "complete"
-	TaskStateQueueError = "queue_error"
+	TaskStateUnknown    TaskState = "unknown"
+	TaskStateNew        TaskState = "new"
+	TaskStateActive     TaskState = "active"
+	TaskStateRetry      TaskState = "retry"
+	TaskStateExpired    TaskState = "expired"
+	TaskStateCompleted  TaskState = "complete"
+	TaskStateQueueError TaskState = "queue_error"
 )
 
 type Task struct {
