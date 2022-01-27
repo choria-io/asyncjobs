@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package jsaj
+package asyncjobs
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
