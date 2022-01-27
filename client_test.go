@@ -27,6 +27,21 @@ func TestAsyncJobs(t *testing.T) {
 	RunSpecs(t, "AsyncJobs")
 }
 
+func ExampleNewTask_basic() {
+	email := map[string]interface{}{
+		"to":      "user@example.net",
+		"subject": "This is a test",
+		"body":    "Sample Email",
+	}
+
+	task, err := NewTask("email:send", email)
+	if err != nil {
+		panic(fmt.Sprintf("Could not create task: %v", err))
+	}
+
+	fmt.Printf("Task ID: %s\n", task.ID)
+}
+
 func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 	d, err := ioutil.TempDir("", "jstest")
 	Expect(err).ToNot(HaveOccurred())
