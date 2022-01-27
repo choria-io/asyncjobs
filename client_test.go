@@ -22,9 +22,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestJSAJ(t *testing.T) {
+func TestAsyncJobs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "JSAJ")
+	RunSpecs(t, "AsyncJobs")
 }
 
 func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
@@ -69,7 +69,7 @@ var _ = Describe("Client", func() {
 			client, err := NewClient(NatsConn(nc))
 			Expect(err).ToNot(HaveOccurred())
 
-			testCount := 1000
+			testCount := 100
 			firstID := ""
 
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
