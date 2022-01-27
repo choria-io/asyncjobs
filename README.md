@@ -1,5 +1,7 @@
 # Choria Async Jobs
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
+
 ## Overview
 
 This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management.
