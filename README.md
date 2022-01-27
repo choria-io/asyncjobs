@@ -117,7 +117,7 @@ A completed task will look like this:
  * Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`
  * Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
  * Worker crashes does not impact the work queue
- * Handler interface (done) with middleware (planned)
+ * Handler interface with middleware (planned, mux is super minimal and needs a rego)
  * Statistics via Prometheus using `PrometheusListenPort()`
  * Real time lifecycle events (planned)
 
