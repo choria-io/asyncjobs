@@ -18,7 +18,6 @@ type ClientOpts struct {
 	replicas      int
 	queues        map[string]*Queue
 	taskRetention time.Duration
-	taskDLQ       bool
 	retryPolicy   RetryPolicy
 	memoryStore   bool
 	statsPort     int

@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -21,7 +20,6 @@ type processor struct {
 	limiter     chan struct{}
 	retryPolicy RetryPolicy
 	log         Logger
-	mu          sync.Mutex
 }
 
 type ItemKind int

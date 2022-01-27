@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,8 +18,6 @@ type Client struct {
 	storage Storage
 
 	log Logger
-
-	mu sync.Mutex
 }
 
 type Storage interface {

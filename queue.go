@@ -6,7 +6,6 @@ package asyncjobs
 
 import (
 	"context"
-	"sync"
 	"time"
 )
 
@@ -21,7 +20,6 @@ type Queue struct {
 	MaxConcurrent int
 
 	storage Storage
-	mu      sync.Mutex
 }
 
 var defaultQueue = Queue{
