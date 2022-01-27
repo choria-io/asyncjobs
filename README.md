@@ -3,6 +3,7 @@
 ## Overview
 
 This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management.
+It is compatible with any NATS JetStream based system like a private hosted JetStream, Choria Streams or a commercial SaaS.
 
 Each Task is stored in JetStream by a unique ID and Work Queue item is made referencing that Task. JetStream will handle
 dealing with scheduling, retries, acknowledgements and more of the Work Queue item.  The stored Task will be updated
@@ -15,8 +16,59 @@ Multiple processes can process jobs concurrently, thus job processing is both ho
 
 ## Status
 
-This is a brand-new project, under heavy development and relies on unreleased behaviors in JetStream. Apart from the
-initial Golang based job processor.
+This is a brand-new project, under heavy development and relies on unreleased behaviors in JetStream. Interfaces might change,
+Structures might change, features might be removed if it's found to be a bad fit for the underlying storage.
+
+Use with care.
+
+## Features
+
+This feature list is incomplete, at present the focus is on determining what will work well for the particular patterns
+JetStream enables, so there might be some churn in the feature set here.
+
+### Tasks
+
+* Task definitions stored post-processing, with various retention policies client opt `TaskRetention()`
+* Task DLQ for failed or expired task definitions, with various retention policies (required more thought)
+* Task deduplication
+* Deadline per task - after this time the task will not be processed
+* Max tries per task, capped to the queue tries
+* Task state tracked during it's lifetime
+* [K-Sortable](https://github.com/segmentio/ksuid) Task GUIDs
+
+### Queues
+
+* Weighted Priority Queues
+* Queues with caps on queued items and different queue-full behaviors (DiscardOld on queue, sets task to TaskStateQueueError)
+* Default or user supplied queue definitions
+
+### Processing
+
+* Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`
+* Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
+* Worker crashes does not impact the work queue
+* Handler interface with middleware (planned, mux is super minimal and needs a rego)
+* Statistics via Prometheus using `PrometheusListenPort()`
+* Real time lifecycle events (planned)
+
+### Storage
+
+* Replicated storage using RAFT protocol, disk based or memory based using `MemoryStorage()`
+
+### Misc
+
+* Supports NATS Contexts for connection configuration
+* Task Scheduling via external Scheduler
+* Supports custom loggers, defaulting to go internal `log`
+
+## Planned Features
+
+* REST Service for enqueuing
+* Explore options for other languages, for example delegating the execution of a task over nats core request-reply
+* A CLI that can configure some aspects of queues like max concurrency etc, view tasks, view events etc
+* A CLI to enqueue jobs
+* A CLI that can listen on queues and execute local scripts
+* A scheduler service that creates tasks on a schedule
 
 ## Example
 
@@ -93,47 +145,3 @@ A completed task will look like this:
   "tries": 1
 }
 ```
-
-## Features
-
-### Tasks
-
- * Task definitions stored post-processing, with various retention policies client opt `TaskRetention()`
- * Task DLQ for failed or expired task definitions, with various retention policies (required more thought)
- * Task deduplication
- * Deadline per task - after this time the task will not be processed
- * Max tries per task, capped to the queue tries
- * Task state tracked during it's lifetime
- * [K-Sortable](https://github.com/segmentio/ksuid) Task GUIDs
-
-### Queues
-
- * Weighted Priority Queues
- * Queues with caps on queued items and different queue-full behaviors (DiscardOld on queue, sets task to TaskStateQueueError)
- * Default or user supplied queue definitions
-
-### Processing
-
- * Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`
- * Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
- * Worker crashes does not impact the work queue
- * Handler interface with middleware (planned, mux is super minimal and needs a rego)
- * Statistics via Prometheus using `PrometheusListenPort()`
- * Real time lifecycle events (planned)
-
-### Storage
-
- * Replicated storage using RAFT protocol, disk based or memory based using `MemoryStorage()`
-
-### Misc
-
- * Supports NATS Contexts for connection configuration 
- * Task Scheduling via external Scheduler
- * Supports custom loggers, defaulting to go internal `log`
-
-## Planned Features
-
- * REST Service for enqueuing
- * Explore options for other languages, for example delegating the execution of a task over nats core request-reply
- * A CLI that can configure some aspects of queues like max concurrency etc, view tasks, view events etc
- * A scheduler service that creates tasks on a schedule
