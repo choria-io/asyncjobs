@@ -1,10 +1,17 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package jsaj
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"net/http"
+	"net/textproto"
 	"sync"
 	"time"
 
@@ -83,10 +90,15 @@ func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error 
 
 	msg := nats.NewMsg(fmt.Sprintf(TasksStreamSubjectPattern, task.ID))
 	msg.Data = jt
-	if task.storageOptions == nil {
+
+	task.mu.Lock()
+	so := task.storageOptions
+	task.mu.Unlock()
+
+	if so == nil {
 		msg.Header.Add(api.JSExpectedLastSubjSeq, "0")
 	} else {
-		msg.Header.Add(api.JSExpectedLastSubjSeq, fmt.Sprintf("%d", task.storageOptions.(*taskMeta).seq))
+		msg.Header.Add(api.JSExpectedLastSubjSeq, fmt.Sprintf("%d", so.(*taskMeta).seq))
 	}
 
 	resp, err := s.nc.RequestMsgWithContext(ctx, msg)
@@ -101,7 +113,9 @@ func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error 
 		return err
 	}
 
+	task.mu.Lock()
 	task.storageOptions = &taskMeta{seq: ack.Sequence}
+	task.mu.Unlock()
 
 	taskUpdateCounter.WithLabelValues().Inc()
 
@@ -133,7 +147,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 		return err
 	}
 
-	_, err = jsm.ParsePubAck(ret) // TODO double check we actually handle whatever happens for duplicates etc
+	_, err = jsm.ParsePubAck(ret)
 	if err != nil {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
@@ -173,7 +187,6 @@ func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error
 		next = s.retry.Duration(20)
 	}
 
-	log.Printf("Delaying reprocessing by %v", next)
 	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
 	return msg.Respond([]byte(resp))
 }
@@ -206,6 +219,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 
 	if len(msg.Data) == 0 {
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
+		msg.Term() // data is corrupt so we terminate it, no associated job to update
 		return nil, fmt.Errorf("invalid queue item received")
 	}
 
@@ -223,13 +237,14 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) error {
 	var err error
 
+	if q.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+
 	if q.Priority == 0 {
 		q.Priority = DefaultPriority
 	}
 
-	if q.Priority > 10 || q.Priority < 1 {
-		return fmt.Errorf("invalid priority %d on queue %s, must be between 1 and 10", q.Priority, q.Name)
-	}
 	if q.MaxTries == 0 {
 		q.MaxTries = DefaultMaxTries
 	}
@@ -238,7 +253,13 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 		q.MaxRunTime = DefaultJobRunTime
 	}
 
-	// q.enqueueSubject = fmt.Sprintf(WorkStreamSubjectPattern, q.Name)
+	if q.MaxConcurrent == 0 {
+		q.MaxConcurrent = DefaultQueueMaxConcurrent
+	}
+
+	if q.Priority > 10 || q.Priority < 1 {
+		return fmt.Errorf("invalid priority %d on queue %s, must be between 1 and 10", q.Priority, q.Name)
+	}
 
 	opts := []jsm.StreamOption{
 		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name)),
@@ -259,9 +280,6 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 	}
 	if q.DiscardOld {
 		opts = append(opts, jsm.DiscardOld())
-	}
-	if q.MaxConcurrent == 0 {
-		q.MaxConcurrent = DefaultQueueMaxConcurrent
 	}
 
 	s.qStreams[q.Name], err = s.mgr.LoadOrNewStream(fmt.Sprintf(WorkStreamNamePattern, q.Name), opts...)
@@ -297,7 +315,9 @@ func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
 		return nil, err
 	}
 
+	task.mu.Lock()
 	task.storageOptions = &taskMeta{seq: msg.Sequence}
+	task.mu.Unlock()
 
 	return task, nil
 }
@@ -321,9 +341,7 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 		opts = append(opts, jsm.FileStorage())
 	}
 
-	if retention > 0 {
-		opts = append(opts, jsm.MaxAge(retention))
-	}
+	opts = append(opts, jsm.MaxAge(retention))
 
 	s.tasks = &taskStorage{mgr: s.mgr}
 	s.tasks.stream, err = s.mgr.LoadOrNewStream(TasksStreamName, opts...)
@@ -332,4 +350,24 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 	}
 
 	return nil
+}
+
+const (
+	hdrLine   = "NATS/1.0\r\n"
+	crlf      = "\r\n"
+	hdrPreEnd = len(hdrLine) - len(crlf)
+)
+
+func decodeHeadersMsg(data []byte) (http.Header, error) {
+	tp := textproto.NewReader(bufio.NewReader(bytes.NewReader(data)))
+	if l, err := tp.ReadLine(); err != nil || l != hdrLine[:hdrPreEnd] {
+		return nil, fmt.Errorf("could not decode headers")
+	}
+
+	mh, err := tp.ReadMIMEHeader()
+	if err != nil {
+		return nil, fmt.Errorf("could not decode headers")
+	}
+
+	return http.Header(mh), nil
 }

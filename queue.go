@@ -1,3 +1,7 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package jsaj
 
 import (
@@ -16,10 +20,8 @@ type Queue struct {
 	MaxRunTime    time.Duration
 	MaxConcurrent int
 
-	storage     Storage
-	storageOpts interface{}
-
-	mu sync.Mutex
+	storage Storage
+	mu      sync.Mutex
 }
 
 var defaultQueue = Queue{

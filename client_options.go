@@ -1,3 +1,7 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package jsaj
 
 import (
@@ -100,10 +104,10 @@ func StoreReplicas(r uint) ClientOpt {
 // WorkQueues configures the client to consume messages from one or many queues
 //
 // When not set the "DEFAULT" queue will be used.
-func WorkQueues(queues ...Queue) ClientOpt {
+func WorkQueues(queues ...*Queue) ClientOpt {
 	return func(opts *ClientOpts) error {
 		for _, q := range queues {
-			opts.queues[q.Name] = &q
+			opts.queues[q.Name] = q
 		}
 		return nil
 	}

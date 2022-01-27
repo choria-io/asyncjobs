@@ -1,7 +1,12 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package jsaj
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/segmentio/ksuid"
@@ -33,6 +38,7 @@ type Task struct {
 	LastErr     string      `json:"last_err,omitempty"`
 
 	storageOptions interface{}
+	mu             sync.Mutex
 }
 
 type TaskResult struct {

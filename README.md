@@ -18,11 +18,6 @@ Multiple processes can process jobs concurrently, thus job processing is both ho
 This is a brand-new project, under heavy development and relies on unreleased behaviors in JetStream. Apart from the
 initial Golang based job processor.
 
-Other components are planned:
-
- * A Scheduler that can create periodic tasks
- * A CLI to inspect the jobs list, view tasks by ID and update certain aspects of the storage and scheduling in JetStream
-
 ## Example
 
 Tasks are enqueued using the client, here we create a task with a map as payload, we set a deadline for 1 hour to 
@@ -134,3 +129,10 @@ A completed task will look like this:
 
  * Supports NATS Contexts for connection configuration 
  * Task Scheduling via external Scheduler 
+
+## Planned Features
+
+ * REST Service for enqueuing
+ * Explore options for other languages, for example delegating the execution of a task over nats core request-reply
+ * A CLI that can configure some aspects of queues like max concurrency etc, view tasks, view events etc
+ * A scheduler service that creates tasks on a schedule

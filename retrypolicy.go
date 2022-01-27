@@ -1,3 +1,7 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package jsaj
 
 import (
@@ -25,6 +29,8 @@ var (
 
 	// RetryDefault is the default retry policy
 	RetryDefault = RetryLinearTenMinutes
+
+	retryForTesting = linearPolicy(1, 0.1, time.Millisecond, 10*time.Millisecond)
 )
 
 func (b RetryPolicy) Duration(n int) time.Duration {
