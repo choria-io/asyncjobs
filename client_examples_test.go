@@ -31,7 +31,7 @@ func ExampleClient_LoadTaskByID() {
 	fmt.Printf("Loaded task %s in state %s", task.ID, task.State)
 }
 
-func ExampleClient_Run_consumer() {
+func ExampleClient_consumer() {
 	queue := &Queue{
 		Name:          "P100",
 		MaxRunTime:    60 * time.Minute,
@@ -61,7 +61,7 @@ func ExampleClient_Run_consumer() {
 	panicIfErr(err)
 }
 
-func ExampleClient_EnqueueTask_producer() {
+func ExampleClient_producer() {
 	queue := &Queue{
 		Name:          "P100",
 		MaxRunTime:    60 * time.Minute,
