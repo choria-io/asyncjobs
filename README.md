@@ -1,4 +1,4 @@
-# Choria Async Jobs
+![Choria Asynchronous Jos](https://choria.io/async-logo-horizontal.png)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
 
