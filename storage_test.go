@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/nats-io/jsm.go"
@@ -18,11 +17,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
-
-func TestStorage(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "JSAJ")
-}
 
 var _ = Describe("Storage", func() {
 	var (

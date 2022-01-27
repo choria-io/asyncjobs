@@ -7,7 +7,6 @@ package jsaj
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -21,6 +20,7 @@ type processor struct {
 	c           *Client
 	limiter     chan struct{}
 	retryPolicy RetryPolicy
+	log         Logger
 	mu          sync.Mutex
 }
 
@@ -46,6 +46,7 @@ func newProcessor(c *Client) (*processor, error) {
 		c:           c,
 		limiter:     make(chan struct{}, c.opts.concurrency),
 		retryPolicy: c.opts.retryPolicy,
+		log:         c.log,
 	}
 
 	// add it priority times to the list so a p1 would be processed once per cycle while a p10 10 times a cycle
@@ -77,7 +78,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessI
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
 		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(q.Name).Inc()
-		log.Printf("Loading task %q failed: %s", item.JobID, err)
+		p.log.Errorf("Loading task %q failed: %s", item.JobID, err)
 		p.limiter <- struct{}{}
 		return
 	}
@@ -85,12 +86,12 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessI
 	switch task.State {
 	case TaskStateActive:
 		// TODO: detect stale state
-		log.Printf("Task %s is already in active state", task.ID)
+		p.log.Warnf("Task %s is already in active state", task.ID)
 		p.limiter <- struct{}{}
 		return
 
 	case TaskStateCompleted, TaskStateExpired:
-		log.Printf("Task %s is already %q", task.ID, task.State)
+		p.log.Warnf("Task %s is already %q", task.ID, task.State)
 		p.c.storage.AckItem(ctx, item)
 		p.limiter <- struct{}{}
 		return
@@ -98,11 +99,11 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessI
 
 	if task.Deadline != nil && time.Since(*task.Deadline) < 0 {
 		workQueueEntryPastDeadlineCounter.WithLabelValues(q.Name).Inc()
-		log.Printf("Task %s is past its deadline of %v", task.ID, task.Deadline)
+		p.log.Warnf("Task %s is past its deadline of %v", task.ID, task.Deadline)
 		task.State = TaskStateExpired
 		err = p.c.storage.SaveTaskState(ctx, task)
 		if err != nil {
-			log.Printf("Could not set task %s to expired state: %v", task.ID, err)
+			p.log.Errorf("Could not set task %s to expired state: %v", task.ID, err)
 		}
 		p.limiter <- struct{}{}
 		return
@@ -110,7 +111,7 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessI
 
 	err = p.c.setTaskActive(ctx, task)
 	if err != nil {
-		log.Printf("Setting task active failed: %v", err)
+		p.log.Errorf("Setting task active failed: %v", err)
 		p.limiter <- struct{}{}
 		return
 	}
@@ -133,7 +134,7 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 
 			item, err := p.c.storage.PollQueue(ctx, q)
 			if err != nil {
-				log.Printf("Polling queue %s failed: %v", q.Name, err)
+				p.log.Errorf("Polling queue %s failed: %v", q.Name, err)
 			}
 
 			p.processMessage(ctx, q, item)
@@ -171,15 +172,15 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 	payload, err := p.mux.Handler(t)(timeout, t)
 	if err != nil {
 		handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()
-		log.Printf("Handling task %s failed: %s", t.ID, err)
+		p.log.Errorf("Handling task %s failed: %s", t.ID, err)
 		err = p.c.handleTaskError(ctx, t, err)
 		if err != nil {
-			log.Printf("Updating task after failed processing failed: %v", err)
+			p.log.Warnf("Updating task after failed processing failed: %v", err)
 		}
 
 		err = p.c.storage.NakItem(ctx, item)
 		if err != nil {
-			log.Printf("NaK after failed processing failed: %v", err)
+			p.log.Warnf("NaK after failed processing failed: %v", err)
 		}
 
 		return
@@ -187,12 +188,12 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 
 	err = p.c.setTaskSuccess(ctx, t, payload)
 	if err != nil {
-		log.Printf("Updating task after processing failed: %v", err)
+		p.log.Warnf("Updating task after processing failed: %v", err)
 	}
 
 	// we try ack the thing anyway, hail mary to avoid a retry even if setTaskSuccess failed
 	err = p.c.storage.AckItem(ctx, item)
 	if err != nil {
-		log.Printf("Acknowledging work item failed: %v", err)
+		p.log.Errorf("Acknowledging work item failed: %v", err)
 	}
 }

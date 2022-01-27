@@ -5,8 +5,14 @@
 package jsaj
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/nats-io/jsm.go"
@@ -15,6 +21,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+func TestJSAJ(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "JSAJ")
+}
 
 func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 	d, err := ioutil.TempDir("", "jstest")
@@ -52,73 +63,69 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 	cb(nc, mgr)
 }
 
-// func TestClient(t *testing.T) {
-// 	withJetStream(t, func(t *testing.T, nc *nats.Conn, mgr *jsm.Manager) {
-// 		client, err := NewClient(NatsConn(nc))
-// 		if err != nil {
-// 			t.Fatalf("client failed: %v", err)
-// 		}
-//
-// 		testCount := 1000
-// 		firstID := ""
-//
-// 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-// 		defer cancel()
-//
-// 		for i := 0; i < testCount; i++ {
-// 			task, err := NewTask("test", map[string]string{"hello": "world"})
-// 			if err != nil {
-// 				t.Fatalf("task failed: %v", err)
-// 			}
-//
-// 			if firstID == "" {
-// 				firstID = task.ID
-// 			}
-//
-// 			err = client.EnqueueTask(ctx, "DEFAULT", task)
-// 			if err != nil {
-// 				t.Fatalf("enqueue failed: %v", err)
-// 			}
-// 		}
-//
-// 		log.Printf("Starting processing")
-//
-// 		handled := int32(0)
-//
-// 		router := NewTaskRouter()
-// 		router.HandleFunc("test", func(ctx context.Context, t *Task) ([]byte, error) {
-// 			if t.Tries > 1 {
-// 				log.Printf("Try %d for task %s", t.Tries, t.ID)
-// 			}
-//
-// 			done := atomic.AddInt32(&handled, 1)
-// 			if done == int32(testCount) {
-// 				log.Printf("Processed all messages")
-// 				time.AfterFunc(50*time.Millisecond, func() {
-// 					cancel()
-// 				})
-// 			} else if done > 0 && done%100 == 0 {
-// 				return nil, fmt.Errorf("simulated error on %d", done)
-// 			}
-//
-// 			return []byte("done"), nil
-// 		})
-//
-// 		err = client.Run(ctx, router)
-// 		if err != nil && err != context.DeadlineExceeded && err != context.Canceled {
-// 			t.Fatalf("client run failed: %s", err)
-// 		}
-//
-// 		task, err := client.LoadTaskByID(firstID)
-// 		if err != nil {
-// 			t.Fatalf("load failed: %v", err)
-// 		}
-// 		if task.State == TaskStateCompleted {
-// 			tj, _ := json.MarshalIndent(task, "", "  ")
-// 			fmt.Printf("Task: %s\n", string(tj))
-// 			fmt.Printf("%s task %s @ %s result: %q", task.State, task.ID, task.Result.CompletedAt, task.Result.Payload)
-// 		} else {
-// 			fmt.Printf("error task: %#v", task)
-// 		}
-// 	})
-// }
+var _ = Describe("Client", func() {
+	It("Should function", func() {
+		withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+			client, err := NewClient(NatsConn(nc))
+			Expect(err).ToNot(HaveOccurred())
+
+			testCount := 1000
+			firstID := ""
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			for i := 0; i < testCount; i++ {
+				task, err := NewTask("test", map[string]string{"hello": "world"})
+				Expect(err).ToNot(HaveOccurred())
+
+				if firstID == "" {
+					firstID = task.ID
+				}
+
+				err = client.EnqueueTask(ctx, "DEFAULT", task)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			log.Printf("Starting processing")
+
+			handled := int32(0)
+
+			router := NewTaskRouter()
+			router.HandleFunc("test", func(ctx context.Context, t *Task) ([]byte, error) {
+				if t.Tries > 1 {
+					log.Printf("Try %d for task %s", t.Tries, t.ID)
+				}
+
+				done := atomic.AddInt32(&handled, 1)
+				if done == int32(testCount) {
+					log.Printf("Processed all messages")
+					time.AfterFunc(50*time.Millisecond, func() {
+						cancel()
+					})
+				} else if done > 0 && done%100 == 0 {
+					return nil, fmt.Errorf("simulated error on %d", done)
+				}
+
+				return []byte("done"), nil
+			})
+
+			err = client.Run(ctx, router)
+			if err != nil && err != context.DeadlineExceeded && err != context.Canceled {
+				Fail(fmt.Sprintf("client run failed: %s", err))
+			}
+
+			task, err := client.LoadTaskByID(firstID)
+			if err != nil {
+				Fail(fmt.Sprintf("load failed: %v", err))
+			}
+			if task.State == TaskStateCompleted {
+				tj, _ := json.MarshalIndent(task, "", "  ")
+				fmt.Printf("Task: %s\n", string(tj))
+				fmt.Printf("%s task %s @ %s result: %q", task.State, task.ID, task.Result.CompletedAt, task.Result.Payload)
+			} else {
+				fmt.Printf("error task: %#v", task)
+			}
+		})
+	})
+})

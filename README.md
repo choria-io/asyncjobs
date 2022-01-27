@@ -128,7 +128,8 @@ A completed task will look like this:
 ### Misc
 
  * Supports NATS Contexts for connection configuration 
- * Task Scheduling via external Scheduler 
+ * Task Scheduling via external Scheduler
+ * Supports custom loggers, defaulting to go internal `log`
 
 ## Planned Features
 

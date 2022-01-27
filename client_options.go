@@ -22,10 +22,19 @@ type ClientOpts struct {
 	retryPolicy   RetryPolicy
 	memoryStore   bool
 	statsPort     int
+	logger        Logger
 	nc            *nats.Conn
 }
 
 type ClientOpt func(opts *ClientOpts) error
+
+// CustomLogger sets a custom logger to use for all logging
+func CustomLogger(log Logger) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.logger = log
+		return nil
+	}
+}
 
 // NatsConn sets an already connected NATS connection as communications channel
 func NatsConn(nc *nats.Conn) ClientOpt {
