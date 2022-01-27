@@ -48,16 +48,12 @@ type jetStreamStorage struct {
 }
 
 type taskStorage struct {
-	replicas      int
-	memoryBacked  bool
-	taskRetention time.Duration
-	mgr           *jsm.Manager
-	stream        *jsm.Stream
+	mgr    *jsm.Manager
+	stream *jsm.Stream
 }
 
 type taskMeta struct {
 	seq uint64
-	msg *nats.Msg
 }
 
 func newJetStreamStorage(nc *nats.Conn, rp RetryPolicy) (*jetStreamStorage, error) {
@@ -192,7 +188,9 @@ func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error
 }
 
 func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error) {
+	s.mu.Lock()
 	qc, ok := s.qConsumers[q.Name]
+	s.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("invalid queue storage state")
 	}
@@ -282,7 +280,9 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 		opts = append(opts, jsm.DiscardOld())
 	}
 
+	s.mu.Lock()
 	s.qStreams[q.Name], err = s.mgr.LoadOrNewStream(fmt.Sprintf(WorkStreamNamePattern, q.Name), opts...)
+	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,9 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 		jsm.AcknowledgeExplicit(),
 		jsm.MaxDeliveryAttempts(q.MaxTries),
 	}
+	s.mu.Lock()
 	s.qConsumers[q.Name], err = s.qStreams[q.Name].LoadOrNewConsumer("WORKERS", wopts...)
+	s.mu.Unlock()
 	if err != nil {
 		return err
 	}

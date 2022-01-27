@@ -131,8 +131,8 @@ var _ = Describe("Storage", func() {
 		})
 
 		It("Should set defaults", func() {
-			prepare(func(storage *jetStreamStorage, q *Queue) {
-				q = &Queue{Name: "ginkgo"}
+			prepare(func(storage *jetStreamStorage, _ *Queue) {
+				q := &Queue{Name: "ginkgo"}
 				err := storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -144,8 +144,8 @@ var _ = Describe("Storage", func() {
 		})
 
 		It("Should detect invalid priority", func() {
-			prepare(func(storage *jetStreamStorage, q *Queue) {
-				q = &Queue{Name: "ginkgo", Priority: 100}
+			prepare(func(storage *jetStreamStorage, _ *Queue) {
+				q := &Queue{Name: "ginkgo", Priority: 100}
 				err := storage.PrepareQueue(q, 1, true)
 				Expect(err).To(MatchError("invalid priority 100 on queue ginkgo, must be between 1 and 10"))
 
