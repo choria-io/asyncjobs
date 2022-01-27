@@ -21,17 +21,12 @@ import (
 )
 
 const (
-	TasksStreamName           = "JSAJ_T" // stores tasks
-	TasksStreamSubjects       = "JSAJ.T.*"
-	TasksStreamSubjectPattern = "JSAJ.T.%s"
+	TasksStreamName           = "CHORIA_AJ_TASKS" // stores tasks
+	TasksStreamSubjects       = "CHORIA_AJ.T.*"
+	TasksStreamSubjectPattern = "CHORIA_AJ.T.%s"
 
-	WorkStreamNamePattern    = "JSAJ_Q_%s" // individual work queues
-	WorkStreamSubjectPattern = "JSAJ.Q.%s"
-
-	DefaultJobRunTime         = time.Hour
-	DefaultPriority           = 5
-	DefaultMaxTries           = 10
-	DefaultQueueMaxConcurrent = 100
+	WorkStreamNamePattern    = "CHORIA_AJ_Q_%s" // individual work queues
+	WorkStreamSubjectPattern = "CHORIA_AJ.Q.%s"
 )
 
 type jetStreamStorage struct {

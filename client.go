@@ -13,14 +13,22 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	DefaultJobRunTime         = time.Hour
+	DefaultPriority           = 5
+	DefaultMaxTries           = 10
+	DefaultQueueMaxConcurrent = 100
+)
+
+// Client connects Task producers and Task handlers to the backend
 type Client struct {
 	opts    *ClientOpts
-	storage Storage
+	storage storage
 
 	log Logger
 }
 
-type Storage interface {
+type storage interface {
 	SaveTaskState(ctx context.Context, task *Task) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
 	AckItem(ctx context.Context, item *ProcessItem) error
@@ -31,6 +39,9 @@ type Storage interface {
 	LoadTaskByID(id string) (*Task, error)
 }
 
+// NewClient creates a new client, one of NatsConn() or NatsContext() must be passed, other options are optional.
+//
+// When no Queue() is supplied a default queue called DEFAULT will be used
 func NewClient(opts ...ClientOpt) (*Client, error) {
 	copts := &ClientOpts{
 		replicas:    1,
@@ -72,6 +83,7 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 	return c, nil
 }
 
+// Run starts processing messages using the router until error or interruption
 func (c *Client) Run(ctx context.Context, router *Mux) error {
 	proc, err := newProcessor(c)
 	if err != nil {
@@ -81,6 +93,21 @@ func (c *Client) Run(ctx context.Context, router *Mux) error {
 	c.startPrometheus()
 
 	return proc.processMessages(ctx, router)
+}
+
+// LoadTaskByID loads a task from the backend using its ID
+func (c *Client) LoadTaskByID(id string) (*Task, error) {
+	return c.storage.LoadTaskByID(id)
+}
+
+// EnqueueTask adds a task to the named queue which must already exist
+func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) error {
+	q, ok := c.opts.queues[queue]
+	if !ok {
+		return fmt.Errorf("unknown queue: %s", queue)
+	}
+
+	return q.enqueueTask(ctx, task)
 }
 
 func (c *Client) startPrometheus() {
@@ -95,19 +122,6 @@ func (c *Client) startPrometheus() {
 
 func (c *Client) setupStreams() error {
 	return c.storage.PrepareTasks(c.opts.memoryStore, c.opts.replicas, c.opts.taskRetention)
-}
-
-func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) error {
-	q, ok := c.opts.queues[queue]
-	if !ok {
-		return fmt.Errorf("unknown queue: %s", queue)
-	}
-
-	return q.EnqueueTask(ctx, task)
-}
-
-func (c *Client) LoadTaskByID(id string) (*Task, error) {
-	return c.storage.LoadTaskByID(id)
 }
 
 func nowPointer() *time.Time {

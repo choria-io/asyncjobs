@@ -22,12 +22,15 @@ type processor struct {
 	log         Logger
 }
 
+// ItemKind indicates the kind of job a work queue entry represents
 type ItemKind int
 
 var (
+	// TaskItem is a task as defined by Task
 	TaskItem ItemKind = 0
 )
 
+// ProcessItem is an individual item stored in the work queue
 type ProcessItem struct {
 	Kind  ItemKind `json:"kind"`
 	JobID string   `json:"job"`
