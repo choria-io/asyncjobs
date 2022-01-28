@@ -136,7 +136,7 @@ func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 	return c.storage.SaveTaskState(ctx, t)
 }
 
-func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload []byte) error {
+func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{}) error {
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateCompleted
 	t.Result = &TaskResult{

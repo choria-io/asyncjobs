@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,11 +39,13 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 		Port:      -1,
 		Host:      "localhost",
 		LogFile:   "/dev/stdout",
-		Trace:     true,
+		Trace:     false,
 	}
 
 	s, err := server.NewServer(opts)
 	Expect(err).ToNot(HaveOccurred())
+
+	// s.ConfigureLogger()
 
 	go s.Start()
 	if !s.ReadyForConnections(10 * time.Second) {
@@ -53,7 +56,7 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 		s.WaitForShutdown()
 	}()
 
-	nc, err := nats.Connect(s.ClientURL(), nats.UseOldRequestStyle())
+	nc, err := nats.Connect(s.ClientURL())
 	Expect(err).ToNot(HaveOccurred())
 	defer nc.Close()
 
@@ -66,10 +69,11 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 var _ = Describe("Client", func() {
 	It("Should function", func() {
 		withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
-			client, err := NewClient(NatsConn(nc))
+			client, err := NewClient(NatsConn(nc), RetryBackoffPolicy(RetryLinearOneMinute))
 			Expect(err).ToNot(HaveOccurred())
 
-			testCount := 100
+			fmt.Printf("URL: %s\n", nc.ConnectedUrl())
+			testCount := 1
 			firstID := ""
 
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -92,7 +96,7 @@ var _ = Describe("Client", func() {
 			handled := int32(0)
 
 			router := NewTaskRouter()
-			router.HandleFunc("test", func(ctx context.Context, t *Task) ([]byte, error) {
+			router.HandleFunc("test", func(ctx context.Context, t *Task) (interface{}, error) {
 				if t.Tries > 1 {
 					log.Printf("Try %d for task %s", t.Tries, t.ID)
 				}
@@ -126,6 +130,54 @@ var _ = Describe("Client", func() {
 			} else {
 				fmt.Printf("error task: %#v", task)
 			}
+		})
+	})
+
+	It("Should handle retried messages with a backoff delay", func() {
+		Skip("Waiting for server bug to be fixed")
+		withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			client, err := NewClient(NatsConn(nc), RetryBackoffPolicy(retryForTesting))
+			Expect(err).ToNot(HaveOccurred())
+
+			task, err := NewTask("ginkgo", "test")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+			task, err = NewTask("ginkgo", "test")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+			task, err = NewTask("ginkgo", "test")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+			tries := []time.Time{}
+
+			router := NewTaskRouter()
+			router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+				tries = append(tries, time.Now())
+
+				fmt.Printf("Trying task %s on try %d\n", t.ID, t.Tries)
+
+				if len(tries) < 2 {
+					return "fail", fmt.Errorf("simulated failure")
+				}
+
+				wg.Done()
+				return "done", nil
+			})
+
+			go client.Run(ctx, router)
+
+			time.Sleep(20 * time.Second)
+
+			task, err = client.LoadTaskByID(task.ID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(task.State).To(Equal(TaskStateCompleted))
+			Expect(task.Tries).To(Equal(1))
 		})
 	})
 })

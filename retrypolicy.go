@@ -38,7 +38,12 @@ func (b RetryPolicy) Duration(n int) time.Duration {
 		n = len(b.Intervals) - 1
 	}
 
-	return b.jitter(b.Intervals[n])
+	delay := b.jitter(b.Intervals[n])
+	if delay == 0 {
+		delay = b.Intervals[0]
+	}
+
+	return delay
 }
 
 func linearPolicy(steps uint64, jitter float64, min time.Duration, max time.Duration) RetryPolicy {

@@ -3,8 +3,8 @@ module github.com/choria-io/asyncjobs
 go 1.17
 
 require (
-	github.com/nats-io/jsm.go v0.0.28-0.20220126084730-e83b7f72ebca
-	github.com/nats-io/nats-server/v2 v2.7.1
+	github.com/nats-io/jsm.go v0.0.27
+	github.com/nats-io/nats-server/v2 v2.7.2-0.20220126224453-26b692ee73c0
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/onsi/ginkgo/v2 v2.1.0
 	github.com/onsi/gomega v1.17.0

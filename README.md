@@ -1,7 +1,5 @@
 ![Choria Asynchronous Jos](https://choria.io/async-logo-horizontal.png)
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
-
 ## Overview
 
 This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management.
@@ -15,6 +13,8 @@ A single process can handle different types of task by means of different named 
 polled in a priority-weighted manner for work.
 
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable.
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
 
 ## Status
 
@@ -110,10 +110,10 @@ queue := &Queue{
 client, _ := NewClient(NatsContext("WQ"), WorkQueues(queue))
 
 router := NewTaskRouter()
-router.HandleFunc("example", func(ctx context.Context, t *Task) ([]byte, error) {
+router.HandleFunc("example", func(ctx context.Context, t *Task) (interface{}, error) {
 	log.Printf("Processing task %s", t.ID)
 	
-	return []byte("done"), nil
+	return "done", nil
 })
 
 client.Run(ctx, router)
@@ -138,7 +138,7 @@ A completed task will look like this:
   "queue": "TEST",
   "payload": "eyJoZWxsbyI6IndvcmxkIn0=",
   "result": {
-    "payload": "ZG9uZQ==",
+    "payload": "done",
     "completed": "2022-01-26T14:46:09.427182Z"
   },
   "state": "complete",

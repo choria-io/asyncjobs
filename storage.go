@@ -173,13 +173,17 @@ func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error
 	// for when getting metadata fails, this ensures a delay with jitter
 	md, err := msg.Metadata()
 	if err == nil {
-		next = s.retry.Duration(int(md.NumDelivered) - 1)
+		next = s.retry.Duration(int(md.NumDelivered))
 	} else {
 		next = s.retry.Duration(20)
 	}
 
+	timeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
-	return msg.Respond([]byte(resp))
+	_, err = s.nc.RequestWithContext(timeout, msg.Reply, []byte(resp))
+	return err
 }
 
 func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error) {
