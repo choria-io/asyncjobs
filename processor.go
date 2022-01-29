@@ -7,9 +7,11 @@ package asyncjobs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"time"
 
+	"github.com/nats-io/jsm.go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -70,54 +72,60 @@ func newProcessor(c *Client) (*processor, error) {
 	return p, nil
 }
 
-func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessItem) {
+func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessItem) error {
 	if item == nil {
 		p.limiter <- struct{}{}
-		return
+		return nil
 	}
 
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
 		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(q.Name).Inc()
-		p.log.Errorf("Loading task %q failed: %s", item.JobID, err)
 		p.limiter <- struct{}{}
-		return
+		if jsm.IsNatsError(err, 10037) {
+			return fmt.Errorf("task not found")
+		}
+		return fmt.Errorf("loading failed: %s", err)
 	}
 
 	switch task.State {
 	case TaskStateActive:
 		// TODO: detect stale state
-		p.log.Warnf("Task %s is already in active state", task.ID)
 		p.limiter <- struct{}{}
-		return
+		return fmt.Errorf("already active")
 
 	case TaskStateCompleted, TaskStateExpired:
-		p.log.Warnf("Task %s is already %q", task.ID, task.State)
 		p.c.storage.AckItem(ctx, item)
 		p.limiter <- struct{}{}
-		return
+		return fmt.Errorf("already in state %q", task.State)
 	}
 
-	if task.Deadline != nil && time.Since(*task.Deadline) < 0 {
+	if task.Deadline != nil && time.Since(*task.Deadline) > 0 {
 		workQueueEntryPastDeadlineCounter.WithLabelValues(q.Name).Inc()
-		p.log.Warnf("Task %s is past its deadline of %v", task.ID, task.Deadline)
 		task.State = TaskStateExpired
 		err = p.c.storage.SaveTaskState(ctx, task)
 		if err != nil {
 			p.log.Errorf("Could not set task %s to expired state: %v", task.ID, err)
 		}
 		p.limiter <- struct{}{}
-		return
+		return fmt.Errorf("past deadline")
+
 	}
 
 	err = p.c.setTaskActive(ctx, task)
 	if err != nil {
-		p.log.Errorf("Setting task active failed: %v", err)
 		p.limiter <- struct{}{}
-		return
+		return fmt.Errorf("setting active failed: %v", err)
+	}
+
+	if p.mux == nil {
+		p.limiter <- struct{}{}
+		return fmt.Errorf("no router registered")
 	}
 
 	go p.handle(ctx, task, item, q.MaxRunTime)
+
+	return nil
 }
 
 func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
@@ -133,12 +141,16 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 
 			workQueuePollCounter.WithLabelValues(q.Name).Inc()
 
+			// log.Printf("Polling %s", p.c.storage.(*jetStreamStorage).qConsumers[q.Name].NextSubject())
 			item, err := p.c.storage.PollQueue(ctx, q)
 			if err != nil {
 				p.log.Errorf("Polling queue %s failed: %v", q.Name, err)
 			}
 
-			p.processMessage(ctx, q, item)
+			err = p.processMessage(ctx, q, item)
+			if err != nil {
+				p.log.Warnf("Processing job %s failed: %v", item.JobID, err)
+			}
 
 			// TODO: this is grim, should be more intelligent here, either backoff when idle and speed up when there are messages
 			// or build something that does longer polls on a per queue basis but with sleeps based on the priority between polls
@@ -150,6 +162,7 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 			//
 			// this now polls every 50ms when not limited by the p.limiter, bad. Asynq sleeps a second between polls so maybe I am
 			// overthinking the situation
+			// time.Sleep(100 * time.Millisecond)
 			time.Sleep(10 * time.Millisecond)
 		}
 	}

@@ -64,8 +64,8 @@ type Task struct {
 
 // TaskResult is the result of task execution, this will only be set for successfully processed jobs
 type TaskResult struct {
-	Payload     []byte    `json:"payload"`
-	CompletedAt time.Time `json:"completed"`
+	Payload     interface{} `json:"payload"`
+	CompletedAt time.Time   `json:"completed"`
 }
 
 // NewTask creates a new task of taskType that can later be used to route tasks to handlers.

@@ -13,11 +13,11 @@ import (
 // Handler handles tasks
 type Handler interface {
 	// ProcessTask processes a single task, the response bytes will be stored in the original task
-	ProcessTask(ctx context.Context, t *Task) ([]byte, error)
+	ProcessTask(ctx context.Context, t *Task) (interface{}, error)
 }
 
 // HandlerFunc handles a single task, the response bytes will be stored in the original task
-type HandlerFunc func(ctx context.Context, t *Task) ([]byte, error)
+type HandlerFunc func(ctx context.Context, t *Task) (interface{}, error)
 
 // Mux routes messages
 //
@@ -41,7 +41,7 @@ func (m *Mux) Handler(t *Task) HandlerFunc {
 
 	hf, ok := m.hf[t.Type]
 	if !ok {
-		return func(ctx context.Context, t *Task) ([]byte, error) {
+		return func(ctx context.Context, t *Task) (interface{}, error) {
 			return nil, fmt.Errorf("no handler for task type %s", t.Type)
 		}
 	}
