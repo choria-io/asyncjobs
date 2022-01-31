@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nats-io/jsm.go/api"
 	"github.com/segmentio/ksuid"
 )
 
@@ -60,6 +61,14 @@ type Task struct {
 
 	storageOptions interface{}
 	mu             sync.Mutex
+}
+
+// TasksInfo is state about the tasks store
+type TasksInfo struct {
+	// Time is the information was gathered
+	Time time.Time `json:"time"`
+	// Stream is the active JetStream Stream Information
+	Stream *api.StreamInfo `json:"stream_info"`
 }
 
 // TaskResult is the result of task execution, this will only be set for successfully processed jobs

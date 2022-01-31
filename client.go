@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nats-io/jsm.go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
 	DefaultJobRunTime         = time.Hour
-	DefaultPriority           = 5
 	DefaultMaxTries           = 10
 	DefaultQueueMaxConcurrent = 100
 )
@@ -23,12 +23,12 @@ const (
 // Client connects Task producers and Task handlers to the backend
 type Client struct {
 	opts    *ClientOpts
-	storage storage
+	storage *jetStreamStorage
 
 	log Logger
 }
 
-type storage interface {
+type Storage interface {
 	SaveTaskState(ctx context.Context, task *Task) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
 	AckItem(ctx context.Context, item *ProcessItem) error
@@ -39,13 +39,28 @@ type storage interface {
 	LoadTaskByID(id string) (*Task, error)
 }
 
+// StorageAdmin is helpers to support the CLI mainly, this leaks a bunch of details about JetStream
+// but that's ok, we're not really intending to change the storage or support more
+type StorageAdmin interface {
+	Queues() ([]*QueueInfo, error)
+	QueueNames() ([]string, error)
+	QueueInfo(name string) (*QueueInfo, error)
+	PurgeQueue(name string) error
+	PrepareQueue(q *Queue, replicas int, memory bool) error
+	PrepareTasks(memory bool, replicas int, retention time.Duration) error
+	TasksInfo() (*TasksInfo, error)
+	LoadTaskByID(id string) (*Task, error)
+	DeleteTaskByID(id string) error
+	Tasks(ctx context.Context, limit int32) (chan *Task, error)
+	TasksStore() (*jsm.Manager, *jsm.Stream, error)
+}
+
 // NewClient creates a new client, one of NatsConn() or NatsContext() must be passed, other options are optional.
 //
 // When no Queue() is supplied a default queue called DEFAULT will be used
 func NewClient(opts ...ClientOpt) (*Client, error) {
 	copts := &ClientOpts{
 		replicas:    1,
-		queues:      map[string]*Queue{},
 		concurrency: 10,
 		retryPolicy: RetryDefault,
 		logger:      &defaultLogger{},
@@ -60,14 +75,14 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 	}
 
 	c := &Client{opts: copts, log: copts.logger}
-	c.storage, err = newJetStreamStorage(copts.nc, copts.retryPolicy)
+	c.storage, err = newJetStreamStorage(copts.nc, copts.retryPolicy, c.log)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(c.opts.queues) == 0 {
-		c.log.Warnf("Creating %s queue with no user defined queues set", defaultQueue.Name)
-		c.opts.queues[defaultQueue.Name] = &defaultQueue
+	if c.opts.queue == nil {
+		c.opts.queue = newDefaultQueue()
+		c.log.Debugf("Creating %s queue with no user defined queues set", c.opts.queue.Name)
 	}
 
 	err = c.setupStreams()
@@ -85,6 +100,10 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 
 // Run starts processing messages using the router until error or interruption
 func (c *Client) Run(ctx context.Context, router *Mux) error {
+	if c.opts.queue == nil {
+		return fmt.Errorf("no queue defined")
+	}
+
 	proc, err := newProcessor(c)
 	if err != nil {
 		return err
@@ -101,13 +120,12 @@ func (c *Client) LoadTaskByID(id string) (*Task, error) {
 }
 
 // EnqueueTask adds a task to the named queue which must already exist
-func (c *Client) EnqueueTask(ctx context.Context, queue string, task *Task) error {
-	q, ok := c.opts.queues[queue]
-	if !ok {
-		return fmt.Errorf("unknown queue: %s", queue)
-	}
+func (c *Client) EnqueueTask(ctx context.Context, task *Task) error {
+	return c.opts.queue.enqueueTask(ctx, task)
+}
 
-	return q.enqueueTask(ctx, task)
+func (c *Client) StorageAdmin() StorageAdmin {
+	return c.storage
 }
 
 func (c *Client) startPrometheus() {
@@ -152,13 +170,10 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, err error) error 
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateRetry
 
-	if t.Queue != "" {
-		q, ok := c.opts.queues[t.Queue]
-		if ok {
-			if q.MaxTries == t.Tries {
-				c.log.Noticef("Expiring task %s after %d / %d tries", t.ID, t.Tries, q.MaxTries)
-				t.State = TaskStateExpired
-			}
+	if t.Queue != "" && t.Queue == c.opts.queue.Name {
+		if c.opts.queue.MaxTries == t.Tries {
+			c.log.Infof("Expiring task %s after %d / %d tries", t.ID, t.Tries, c.opts.queue.MaxTries)
+			t.State = TaskStateExpired
 		}
 	}
 
@@ -166,14 +181,6 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, err error) error 
 }
 
 func (c *Client) setupQueues() error {
-	for _, q := range c.opts.queues {
-		q.storage = c.storage
-
-		err := c.storage.PrepareQueue(q, c.opts.replicas, c.opts.memoryStore)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	c.opts.queue.storage = c.storage
+	return c.storage.PrepareQueue(c.opts.queue, c.opts.replicas, c.opts.memoryStore)
 }

@@ -11,14 +11,14 @@ import (
 // Logger is a pluggable logger interface
 type Logger interface {
 	Debugf(format string, v ...interface{})
-	Noticef(format string, v ...interface{})
+	Infof(format string, v ...interface{})
 	Warnf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
 }
 
 type defaultLogger struct{}
 
-func (l *defaultLogger) Noticef(format string, v ...interface{}) {
+func (l *defaultLogger) Infof(format string, v ...interface{}) {
 	log.Printf(format, v...)
 }
 

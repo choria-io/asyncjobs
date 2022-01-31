@@ -56,7 +56,7 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 		s.WaitForShutdown()
 	}()
 
-	nc, err := nats.Connect(s.ClientURL())
+	nc, err := nats.Connect(s.ClientURL(), nats.UseOldRequestStyle())
 	Expect(err).ToNot(HaveOccurred())
 	defer nc.Close()
 
@@ -67,13 +67,18 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 }
 
 var _ = Describe("Client", func() {
+	BeforeEach(func() {
+		log.SetOutput(GinkgoWriter)
+	})
+
 	It("Should function", func() {
+		Skip("For interactive testing and debugging")
 		withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+			fmt.Printf("URL: %v\n", nc.ConnectedUrl())
 			client, err := NewClient(NatsConn(nc), RetryBackoffPolicy(RetryLinearOneMinute))
 			Expect(err).ToNot(HaveOccurred())
 
-			fmt.Printf("URL: %s\n", nc.ConnectedUrl())
-			testCount := 1
+			testCount := 1000
 			firstID := ""
 
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -87,7 +92,7 @@ var _ = Describe("Client", func() {
 					firstID = task.ID
 				}
 
-				err = client.EnqueueTask(ctx, "DEFAULT", task)
+				err = client.EnqueueTask(ctx, task)
 				Expect(err).ToNot(HaveOccurred())
 			}
 
@@ -102,7 +107,7 @@ var _ = Describe("Client", func() {
 				}
 
 				done := atomic.AddInt32(&handled, 1)
-				if done == int32(testCount) {
+				if done == int32(testCount)+10 {
 					log.Printf("Processed all messages")
 					time.AfterFunc(50*time.Millisecond, func() {
 						cancel()
@@ -134,7 +139,6 @@ var _ = Describe("Client", func() {
 	})
 
 	It("Should handle retried messages with a backoff delay", func() {
-		Skip("Waiting for server bug to be fixed")
 		withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -144,25 +148,25 @@ var _ = Describe("Client", func() {
 
 			task, err := NewTask("ginkgo", "test")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 			task, err = NewTask("ginkgo", "test")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 			task, err = NewTask("ginkgo", "test")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+			Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 			wg := sync.WaitGroup{}
 			wg.Add(3)
-			tries := []time.Time{}
+			var tries []time.Time
 
 			router := NewTaskRouter()
 			router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
 				tries = append(tries, time.Now())
 
-				fmt.Printf("Trying task %s on try %d\n", t.ID, t.Tries)
+				log.Printf("Trying task %s on try %d\n", t.ID, t.Tries)
 
-				if len(tries) < 2 {
+				if t.Tries < 2 {
 					return "fail", fmt.Errorf("simulated failure")
 				}
 
@@ -172,12 +176,13 @@ var _ = Describe("Client", func() {
 
 			go client.Run(ctx, router)
 
-			time.Sleep(20 * time.Second)
+			wg.Wait()
 
+			Expect(len(tries)).To(Equal(6))
 			task, err = client.LoadTaskByID(task.ID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.State).To(Equal(TaskStateCompleted))
-			Expect(task.Tries).To(Equal(1))
+			Expect(task.Tries).To(Equal(2))
 		})
 	})
 })

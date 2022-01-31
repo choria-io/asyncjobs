@@ -16,7 +16,7 @@ import (
 type ClientOpts struct {
 	concurrency   int
 	replicas      int
-	queues        map[string]*Queue
+	queue         *Queue
 	taskRetention time.Duration
 	retryPolicy   RetryPolicy
 	memoryStore   bool
@@ -38,6 +38,10 @@ func CustomLogger(log Logger) ClientOpt {
 // NatsConn sets an already connected NATS connection as communications channel
 func NatsConn(nc *nats.Conn) ClientOpt {
 	return func(opts *ClientOpts) error {
+		if !nc.Opts.UseOldRequestStyle {
+			return fmt.Errorf("connection with UseOldRequestStyle() is required")
+		}
+
 		opts.nc = nc
 		return nil
 	}
@@ -58,11 +62,18 @@ func PrometheusListenPort(port int) ClientOpt {
 // NatsContext attempts to connect to the NATS client context c
 func NatsContext(c string, opts ...nats.Option) ClientOpt {
 	return func(copts *ClientOpts) error {
-		nc, err := natscontext.Connect(c, opts...)
+		nopts := []nats.Option{
+			nats.MaxReconnects(-1),
+			nats.CustomReconnectDelay(RetryLinearOneMinute.Duration),
+			nats.UseOldRequestStyle(),
+		}
+
+		nc, err := natscontext.Connect(c, append(nopts, opts...)...)
 		if err != nil {
 			return err
 		}
 		copts.nc = nc
+
 		return nil
 	}
 }
@@ -109,14 +120,17 @@ func StoreReplicas(r uint) ClientOpt {
 	}
 }
 
-// WorkQueues configures the client to consume messages from one or many queues
+// WorkQueue configures the client to consume messages from a specific queue
 //
 // When not set the "DEFAULT" queue will be used.
-func WorkQueues(queues ...*Queue) ClientOpt {
+func WorkQueue(queue *Queue) ClientOpt {
 	return func(opts *ClientOpts) error {
-		for _, q := range queues {
-			opts.queues[q.Name] = q
+		if opts.queue != nil {
+			return fmt.Errorf("a queue has already been defined")
 		}
+
+		opts.queue = queue
+
 		return nil
 	}
 }

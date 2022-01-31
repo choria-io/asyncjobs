@@ -37,12 +37,11 @@ func ExampleClient_consumer() {
 		MaxRunTime:    60 * time.Minute,
 		MaxConcurrent: 20,
 		MaxTries:      100,
-		Priority:      100,
 	}
 
 	// Uses the NATS CLI context WQ for connection details, will create the queue if
 	// it does not already exist
-	client, err := NewClient(NatsContext("WQ"), WorkQueues(queue))
+	client, err := NewClient(NatsContext("WQ"), WorkQueue(queue))
 	panicIfErr(err)
 
 	router := NewTaskRouter()
@@ -67,7 +66,6 @@ func ExampleClient_producer() {
 		MaxRunTime:    60 * time.Minute,
 		MaxConcurrent: 20,
 		MaxTries:      100,
-		Priority:      100,
 	}
 
 	email := newEmail("user@example.net", "Test Subject", "Test Body")
@@ -78,11 +76,11 @@ func ExampleClient_producer() {
 
 	// Uses the NATS CLI context WQ for connection details, will create the queue if
 	// it does not already exist
-	client, err := NewClient(NatsContext("WQ"), WorkQueues(queue))
+	client, err := NewClient(NatsContext("WQ"), WorkQueue(queue))
 	panicIfErr(err)
 
 	// Adds the task to the queue called P100
-	err = client.EnqueueTask(context.Background(), "P100", task)
+	err = client.EnqueueTask(context.Background(), task)
 	panicIfErr(err)
 }
 
