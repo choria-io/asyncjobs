@@ -115,24 +115,27 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 		timeout, cancel := context.WithTimeout(ctx, time.Minute)
 		item, err := p.c.storage.PollQueue(timeout, p.queue)
 		cancel()
-		if err == context.Canceled {
-			return nil, err
-		}
 
 		switch {
+		case err == context.Canceled:
+			p.log.Debugf("Context canceled, terminating polling")
+			return nil, err
 		case err == context.DeadlineExceeded:
+			p.log.Debugf("Context timeout, retrying poll")
 			ctr = 0
 			continue
 
 		case err != nil:
+			p.log.Debugf("Unexpected polling error: %v", err)
 			workQueuePollErrorCounter.WithLabelValues(p.queue.Name).Inc()
-			ctr++
-			if p.retryPolicy.Sleep(ctx, ctr) == context.DeadlineExceeded {
+			if retryLinearTenSeconds.Sleep(ctx, ctr) == context.Canceled {
 				return nil, ctx.Err()
 			}
+			ctr++
 			continue
 
 		case item == nil:
+			p.log.Debugf("Had a nil item, retrying")
 			// 404 etc
 			continue
 		}

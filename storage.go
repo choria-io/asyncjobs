@@ -188,6 +188,8 @@ func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error
 	timeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
+	s.log.Debugf("NaKing item with %v delay", next)
+
 	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
 	_, err = s.nc.RequestWithContext(timeout, msg.Reply, []byte(resp))
 	return err
@@ -214,16 +216,19 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 
 	msg, err := s.nc.RequestWithContext(ctx, qc.NextSubject(), rj)
 	if err != nil {
-		s.log.Errorf("Polling failed: %v", err)
-		workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
+		if err != context.DeadlineExceeded {
+			s.log.Errorf("Polling failed: %v", err)
+			workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
+		}
 		return nil, err
 	}
 	status := msg.Header.Get("Status")
-	if status == "404" || status == "409" {
+	if status == "404" || status == "409" || status == "408" {
 		return nil, nil
 	}
 
 	if len(msg.Data) == 0 {
+		s.log.Debugf("0 byte payload with headers %#v", msg.Header)
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
 		msg.Term() // data is corrupt so we terminate it, no associated job to update
 		return nil, fmt.Errorf("invalid queue item received")

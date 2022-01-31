@@ -1,8 +1,15 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/choria-io/asyncjobs"
@@ -13,12 +20,15 @@ import (
 )
 
 type taskCommand struct {
-	id        string
-	ttype     string
-	payload   string
-	queue     string
-	deadline  time.Duration
-	retention time.Duration
+	id          string
+	ttype       string
+	payload     string
+	queue       string
+	deadline    time.Duration
+	retention   time.Duration
+	concurrency int
+	command     string
+	promPort    int
 
 	limit int
 	json  bool
@@ -52,6 +62,62 @@ func configureTaskCommand(app *kingpin.Application) {
 
 	config := tasks.Command("configure", "Configures the Task storage").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
+
+	process := tasks.Command("process", "Process Tasks from a given queue").Action(c.processAction)
+	process.Arg("type", "Types of Tasks to process").Required().Envar("PROCESS_TYPE").StringVar(&c.ttype)
+	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("PROCESS_QUEUE").StringVar(&c.queue)
+	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("PROCESS_CONCURRENCY").IntVar(&c.concurrency)
+	process.Arg("command", "The command to invoke for each Task").Required().Envar("PROCESS_COMMAND").ExistingFileVar(&c.command)
+	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
+}
+
+func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
+	queue := asyncjobs.Queue{Name: c.queue, NoCreate: true}
+	err := prepare(asyncjobs.WorkQueue(&queue), asyncjobs.PrometheusListenPort(c.promPort))
+	if err != nil {
+		return err
+	}
+
+	router := asyncjobs.NewTaskRouter()
+	err = router.HandleFunc(c.ttype, func(ctx context.Context, task *asyncjobs.Task) (interface{}, error) {
+		tj, err := json.Marshal(task)
+		if err != nil {
+			return nil, err
+		}
+
+		stdinFile, err := os.CreateTemp("", "asyncjob")
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(stdinFile.Name())
+		defer stdinFile.Close()
+
+		_, err = stdinFile.Write(tj)
+		if err != nil {
+			return nil, err
+		}
+		stdinFile.Close()
+
+		start := time.Now()
+		log.Infof("Running task %s try %d", task.ID, task.Tries)
+
+		cmd := exec.CommandContext(ctx, c.command)
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CHORIA_AJ_TASK=%s", stdinFile.Name()))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Errorf("Running %s failed: %q", c.command, out)
+			return nil, err
+		}
+
+		log.Infof("Task %s completed after %s and %d tries with %s payload", task.ID, time.Since(start), task.Tries, humanize.IBytes(uint64(len(out))))
+
+		return json.RawMessage(out), nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return client.Run(context.Background(), router)
 }
 
 func (c *taskCommand) purgeAction(_ *kingpin.ParseContext) error {
