@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/nats-io/jsm.go"
@@ -16,12 +16,14 @@ import (
 )
 
 type processor struct {
-	queues      []*Queue
+	queue       *Queue
 	mux         *Mux
 	c           *Client
+	concurrency int
 	limiter     chan struct{}
 	retryPolicy RetryPolicy
 	log         Logger
+	mu          *sync.Mutex
 }
 
 // ItemKind indicates the kind of job a work queue entry represents
@@ -47,23 +49,13 @@ func newProcessItem(kind ItemKind, id string) ([]byte, error) {
 func newProcessor(c *Client) (*processor, error) {
 	p := &processor{
 		c:           c,
+		queue:       c.opts.queue,
+		concurrency: c.opts.concurrency,
 		limiter:     make(chan struct{}, c.opts.concurrency),
 		retryPolicy: c.opts.retryPolicy,
 		log:         c.log,
+		mu:          &sync.Mutex{},
 	}
-
-	// add it priority times to the list so a p1 would be processed once per cycle while a p10 10 times a cycle
-	for _, q := range c.opts.queues {
-		for i := 1; i <= q.Priority; i++ {
-			p.queues = append(p.queues, q)
-		}
-	}
-
-	// now shuffle them to avoid starvation
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(p.queues), func(i, j int) {
-		p.queues[i], p.queues[j] = p.queues[j], p.queues[i]
-	})
 
 	for i := 0; i < cap(p.limiter); i++ {
 		p.limiter <- struct{}{}
@@ -72,16 +64,10 @@ func newProcessor(c *Client) (*processor, error) {
 	return p, nil
 }
 
-func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessItem) error {
-	if item == nil {
-		p.limiter <- struct{}{}
-		return nil
-	}
-
+func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error {
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
-		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(q.Name).Inc()
-		p.limiter <- struct{}{}
+		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(p.queue.Name).Inc()
 		if jsm.IsNatsError(err, 10037) {
 			return fmt.Errorf("task not found")
 		}
@@ -91,79 +77,109 @@ func (p *processor) processMessage(ctx context.Context, q *Queue, item *ProcessI
 	switch task.State {
 	case TaskStateActive:
 		// TODO: detect stale state
-		p.limiter <- struct{}{}
 		return fmt.Errorf("already active")
 
 	case TaskStateCompleted, TaskStateExpired:
 		p.c.storage.AckItem(ctx, item)
-		p.limiter <- struct{}{}
 		return fmt.Errorf("already in state %q", task.State)
 	}
 
 	if task.Deadline != nil && time.Since(*task.Deadline) > 0 {
-		workQueueEntryPastDeadlineCounter.WithLabelValues(q.Name).Inc()
+		workQueueEntryPastDeadlineCounter.WithLabelValues(p.queue.Name).Inc()
 		task.State = TaskStateExpired
 		err = p.c.storage.SaveTaskState(ctx, task)
 		if err != nil {
 			p.log.Errorf("Could not set task %s to expired state: %v", task.ID, err)
 		}
-		p.limiter <- struct{}{}
 		return fmt.Errorf("past deadline")
 
 	}
 
 	err = p.c.setTaskActive(ctx, task)
 	if err != nil {
-		p.limiter <- struct{}{}
 		return fmt.Errorf("setting active failed: %v", err)
 	}
 
-	if p.mux == nil {
-		p.limiter <- struct{}{}
-		return fmt.Errorf("no router registered")
-	}
-
-	go p.handle(ctx, task, item, q.MaxRunTime)
+	go p.handle(ctx, task, item, p.queue.MaxRunTime)
 
 	return nil
 }
 
+func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
+	ctr := 0
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		timeout, cancel := context.WithTimeout(ctx, time.Minute)
+		item, err := p.c.storage.PollQueue(timeout, p.queue)
+		cancel()
+		if err == context.Canceled {
+			return nil, err
+		}
+
+		switch {
+		case err == context.DeadlineExceeded:
+			ctr = 0
+			continue
+
+		case err != nil:
+			workQueuePollErrorCounter.WithLabelValues(p.queue.Name).Inc()
+			ctr++
+			if p.retryPolicy.Sleep(ctx, ctr) == context.DeadlineExceeded {
+				return nil, ctx.Err()
+			}
+			continue
+
+		case item == nil:
+			// 404 etc
+			continue
+		}
+
+		return item, nil
+	}
+}
+
 func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
+	if mux == nil {
+		return fmt.Errorf("mux is required")
+	}
+
 	p.mux = mux
 
 	for {
-		for _, q := range p.queues {
-			select {
-			case <-p.limiter:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-
-			workQueuePollCounter.WithLabelValues(q.Name).Inc()
-
-			// log.Printf("Polling %s", p.c.storage.(*jetStreamStorage).qConsumers[q.Name].NextSubject())
-			item, err := p.c.storage.PollQueue(ctx, q)
+		select {
+		case <-p.limiter:
+			workQueuePollCounter.WithLabelValues(p.queue.Name).Inc()
+			item, err := p.pollItem(ctx)
 			if err != nil {
-				p.log.Errorf("Polling queue %s failed: %v", q.Name, err)
+				if err == context.DeadlineExceeded {
+					p.log.Infof("Processor exiting on context %s", err)
+					return nil
+				}
+				if err == context.Canceled {
+					return nil
+				}
+
+				p.log.Errorf("Unexpected polling error: %v", err)
+				// pollItem already logged and slept
+				p.limiter <- struct{}{}
 			}
 
-			err = p.processMessage(ctx, q, item)
+			if item == nil {
+				continue
+			}
+
+			err = p.processMessage(ctx, item)
 			if err != nil {
 				p.log.Warnf("Processing job %s failed: %v", item.JobID, err)
+				p.limiter <- struct{}{}
+				continue
 			}
-
-			// TODO: this is grim, should be more intelligent here, either backoff when idle and speed up when there are messages
-			// or build something that does longer polls on a per queue basis but with sleeps based on the priority between polls
-			// to create priority perhaps, this way long polls could be used. But that would end up with unprocessed messages, at
-			// least this way we poll only when we know a handler is free based on concurrency.  Perhaps short long polls.
-			//
-			// An alternative is to not allow multiple queues but just one queue and we pull that on a queue-per-client basis, but
-			// I really like the mux idea and multiple workers here
-			//
-			// this now polls every 50ms when not limited by the p.limiter, bad. Asynq sleeps a second between polls so maybe I am
-			// overthinking the situation
-			// time.Sleep(100 * time.Millisecond)
-			time.Sleep(10 * time.Millisecond)
+		case <-ctx.Done():
+			p.log.Infof("Processor exiting on context %s", ctx.Err())
+			return nil
 		}
 	}
 }
@@ -173,6 +189,10 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 		handlersBusyGauge.WithLabelValues().Dec()
 		p.limiter <- struct{}{}
 	}()
+
+	if p.mux == nil {
+		return
+	}
 
 	obs := prometheus.NewTimer(handlerRunTimeSummary.WithLabelValues(t.Queue, t.Type))
 	defer obs.ObserveDuration()

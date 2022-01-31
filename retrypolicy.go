@@ -5,6 +5,7 @@
 package asyncjobs
 
 import (
+	"context"
 	"math/rand"
 	"time"
 )
@@ -44,6 +45,18 @@ func (b RetryPolicy) Duration(n int) time.Duration {
 	}
 
 	return delay
+}
+
+func (b RetryPolicy) Sleep(ctx context.Context, n int) error {
+	timer := time.NewTimer(b.Duration(n))
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	}
 }
 
 func linearPolicy(steps uint64, jitter float64, min time.Duration, max time.Duration) RetryPolicy {

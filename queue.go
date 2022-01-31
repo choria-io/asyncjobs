@@ -6,39 +6,60 @@ package asyncjobs
 
 import (
 	"context"
+	"sync"
 	"time"
+
+	"github.com/nats-io/jsm.go/api"
 )
 
 // Queue represents a work queue
 type Queue struct {
 	// Name is a unique name for the work queue, should be in the character range a-zA-Z0-9
-	Name string
+	Name string `json:"name"`
 	// MaxAge is the absolute longest time an entry can stay in the queue. When not set items will not expire
-	MaxAge time.Duration
+	MaxAge time.Duration `json:"max_age"`
 	// MaxEntries represents the maximum amount of entries that can be in the queue. When it's full new entries will be rejected. When unset no limit is applied.
-	MaxEntries int
+	MaxEntries int `json:"max_entries"`
 	// DiscardOld indicates that when MaxEntries are reached old entries will be discarded rather than new ones rejected
-	DiscardOld bool
-	// Priority is the priority of the queue as expressed in numbers 1-10. A P10 will be polled 10 times every cycle while a P1 will be polled once. Default to DefaultPriority
-	Priority int
+	DiscardOld bool `json:"discard_old"`
 	// MaxTries is the maximum amount of times a entry can be tried, entries will be tried every MaxRunTime with some jitter applied. Default to DefaultMaxTries
-	MaxTries int
+	MaxTries int `json:"max_tries"`
 	// MaxRunTime is the maximum time a task can be processed. Defaults to DefaultJobRunTime
-	MaxRunTime time.Duration
+	MaxRunTime time.Duration `json:"max_runtime"`
 	// MaxConcurrent is the total number of in-flight tasks across all active task handlers combined. Defaults to DefaultQueueMaxConcurrent
-	MaxConcurrent int
+	MaxConcurrent int `json:"max_concurrent"`
+	// NoCreate will not try to create a queue, will bind to an existing one or fail
+	NoCreate bool
 
-	storage storage
+	mu      sync.Mutex
+	storage Storage
 }
 
-var defaultQueue = Queue{
-	Name:          "DEFAULT",
-	MaxRunTime:    time.Minute,
-	MaxTries:      100,
-	MaxConcurrent: DefaultQueueMaxConcurrent,
+// QueueInfo holds information about a queue state
+type QueueInfo struct {
+	// Name is the name of the queue
+	Name string `json:"name"`
+	// Time is the information was gathered
+	Time time.Time `json:"time"`
+	// Stream is the active JetStream Stream Information
+	Stream *api.StreamInfo `json:"stream_info"`
+	// Consumer is the worker stream information
+	Consumer *api.ConsumerInfo `json:"consumer_info"`
 }
 
 func (q *Queue) enqueueTask(ctx context.Context, task *Task) error {
 	task.Queue = q.Name
 	return q.storage.EnqueueTask(ctx, q, task)
+}
+
+func newDefaultQueue() *Queue {
+	return &Queue{
+		Name:          "DEFAULT",
+		MaxRunTime:    time.Minute,
+		MaxTries:      100,
+		MaxConcurrent: DefaultQueueMaxConcurrent,
+		MaxAge:        0,
+		DiscardOld:    false,
+		mu:            sync.Mutex{},
+	}
 }

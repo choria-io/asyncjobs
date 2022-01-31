@@ -9,8 +9,7 @@ Each Task is stored in JetStream by a unique ID and Work Queue item is made refe
 dealing with scheduling, retries, acknowledgements and more of the Work Queue item.  The stored Task will be updated
 during the lifecycle.
 
-A single process can handle different types of task by means of different named Queues that can have priority and are
-polled in a priority-weighted manner for work.
+Different types of task can be stored in one Queue, a single process can attach to a single Queue.
 
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable.
 
@@ -40,9 +39,10 @@ JetStream enables, so there might be some churn in the feature set here.
 
 ### Queues
 
-* Weighted Priority Queues
+* Queues can store different types of task
 * Queues with caps on queued items and different queue-full behaviors (DiscardOld on queue, sets task to TaskStateQueueError)
 * Default or user supplied queue definitions
+* Queue per client, many clients per queue
 
 ### Processing
 
@@ -71,6 +71,7 @@ JetStream enables, so there might be some churn in the feature set here.
 * A CLI to enqueue jobs
 * A CLI that can listen on queues and execute local scripts
 * A scheduler service that creates tasks on a schedule
+* Multiple queues with different priorities accessible in the same client
 
 ## Example
 
@@ -86,10 +87,9 @@ queue := &Queue{
 	MaxRunTime: 60*time.Minute,
 	MaxTries: 100,
 	MaxConcurrent: 100,
-	Priority: 10,
 }
 
-client, _ := NewClient(NatsContext("WQ"), WorkQueues(queue))
+client, _ := NewClient(NatsContext("WQ"), WorkQueue(queue))
 
 payload := map[string]string{"hello": "world"}
 task, _ := NewTask("example", payload, TaskDeadline(time.Now().Add(time.Hour)))
@@ -104,10 +104,9 @@ queue := &Queue{
 	MaxRunTime: 60*time.Minute,
 	MaxTries: 100,
 	MaxConcurrent: 100,
-	Priority: 10,
 }
 
-client, _ := NewClient(NatsContext("WQ"), WorkQueues(queue))
+client, _ := NewClient(NatsContext("WQ"), WorkQueue(queue))
 
 router := NewTaskRouter()
 router.HandleFunc("example", func(ctx context.Context, t *Task) (interface{}, error) {

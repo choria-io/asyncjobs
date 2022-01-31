@@ -37,7 +37,7 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				wg := sync.WaitGroup{}
 				wg.Add(1)
@@ -78,7 +78,7 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				wg := sync.WaitGroup{}
 				wg.Add(1)
@@ -124,7 +124,7 @@ var _ = Describe("Processor", func() {
 
 				<-proc.limiter
 
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: "does.not.exist"})
+				err = proc.processMessage(ctx, &ProcessItem{JobID: "does.not.exist"})
 				Expect(err).To(MatchError("task not found"))
 			})
 		})
@@ -139,7 +139,7 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 				Expect(client.setTaskActive(ctx, task)).ToNot(HaveOccurred())
 
 				proc, err := newProcessor(client)
@@ -147,7 +147,7 @@ var _ = Describe("Processor", func() {
 
 				<-proc.limiter
 
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: task.ID})
+				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("already active"))
 			})
 		})
@@ -162,7 +162,7 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				proc, err := newProcessor(client)
 				Expect(err).ToNot(HaveOccurred())
@@ -170,13 +170,13 @@ var _ = Describe("Processor", func() {
 				<-proc.limiter
 				task.State = TaskStateCompleted
 				Expect(client.storage.SaveTaskState(ctx, task)).ToNot(HaveOccurred())
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: task.ID})
+				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("already in state \"complete\""))
 
 				<-proc.limiter
 				task.State = TaskStateExpired
 				Expect(client.storage.SaveTaskState(ctx, task)).ToNot(HaveOccurred())
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: task.ID})
+				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("already in state \"expired\""))
 
 			})
@@ -192,13 +192,13 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test", TaskDeadline(time.Now().Add(-1*time.Hour)))
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				proc, err := newProcessor(client)
 				Expect(err).ToNot(HaveOccurred())
 
 				<-proc.limiter
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: task.ID})
+				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("past deadline"))
 
 				task, err = client.LoadTaskByID(task.ID)
@@ -217,14 +217,13 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test", TaskDeadline(time.Now().Add(time.Hour)))
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				proc, err := newProcessor(client)
 				Expect(err).ToNot(HaveOccurred())
 
 				<-proc.limiter
-				err = proc.processMessage(ctx, client.opts.queues[defaultQueue.Name], &ProcessItem{JobID: task.ID})
-				Expect(err).To(MatchError("no router registered")) // hacky but this happens before any deadline checks etc
+				Expect(proc.processMessage(ctx, &ProcessItem{JobID: task.ID})).ToNot(HaveOccurred())
 			})
 		})
 
@@ -238,7 +237,7 @@ var _ = Describe("Processor", func() {
 
 				task, err := NewTask("ginkgo", "test")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(client.EnqueueTask(ctx, defaultQueue.Name, task)).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
 
 				wg := sync.WaitGroup{}
 				wg.Add(1)
@@ -270,11 +269,9 @@ var _ = Describe("Processor", func() {
 	})
 
 	Describe("newProcessor", func() {
-		It("Should handle priorities correctly and set up a limiter", func() {
+		It("Should et up a limiter", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
-				q10 := &Queue{Name: "10", Priority: 10}
-				q2 := &Queue{Name: "2", Priority: 2}
-				client, err := NewClient(NatsConn(nc), ClientConcurrency(5), WorkQueues(q10, q2))
+				client, err := NewClient(NatsConn(nc), ClientConcurrency(5))
 				Expect(err).ToNot(HaveOccurred())
 
 				proc, err := newProcessor(client)
@@ -282,19 +279,6 @@ var _ = Describe("Processor", func() {
 
 				Expect(proc.limiter).To(HaveCap(5))
 				Expect(proc.limiter).To(HaveLen(5))
-				Expect(proc.queues).To(HaveLen(12))
-
-				entries := map[string]int{}
-				for _, q := range proc.queues {
-					_, ok := entries[q.Name]
-					if !ok {
-						entries[q.Name] = 0
-					}
-					entries[q.Name]++
-				}
-
-				Expect(entries["10"]).To(Equal(10))
-				Expect(entries["2"]).To(Equal(2))
 			})
 		})
 	})

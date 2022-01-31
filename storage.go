@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/textproto"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/jsm.go"
@@ -25,8 +27,10 @@ const (
 	TasksStreamSubjects       = "CHORIA_AJ.T.*"
 	TasksStreamSubjectPattern = "CHORIA_AJ.T.%s"
 
-	WorkStreamNamePattern    = "CHORIA_AJ_Q_%s" // individual work queues
-	WorkStreamSubjectPattern = "CHORIA_AJ.Q.%s"
+	WorkStreamNamePattern     = "CHORIA_AJ_Q_%s" // individual work queues
+	WorkStreamSubjectPattern  = "CHORIA_AJ.Q.%s"
+	WorkStreamSubjectWildcard = "CHORIA_AJ.Q.*"
+	WorkStreamNamePrefix      = "CHORIA_AJ_Q_"
 )
 
 type jetStreamStorage struct {
@@ -38,6 +42,8 @@ type jetStreamStorage struct {
 
 	qStreams   map[string]*jsm.Stream
 	qConsumers map[string]*jsm.Consumer
+
+	log Logger
 
 	mu sync.Mutex
 }
@@ -51,7 +57,7 @@ type taskMeta struct {
 	seq uint64
 }
 
-func newJetStreamStorage(nc *nats.Conn, rp RetryPolicy) (*jetStreamStorage, error) {
+func newJetStreamStorage(nc *nats.Conn, rp RetryPolicy, log Logger) (*jetStreamStorage, error) {
 	if nc == nil {
 		return nil, fmt.Errorf("no connection supplied")
 	}
@@ -61,6 +67,7 @@ func newJetStreamStorage(nc *nats.Conn, rp RetryPolicy) (*jetStreamStorage, erro
 	s := &jetStreamStorage{
 		nc:         nc,
 		retry:      rp,
+		log:        log,
 		qStreams:   map[string]*jsm.Stream{},
 		qConsumers: map[string]*jsm.Consumer{},
 	}
@@ -194,21 +201,23 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 		return nil, fmt.Errorf("invalid queue storage state")
 	}
 
-	rj, err := json.Marshal(&api.JSApiConsumerGetNextRequest{Batch: 1, NoWait: true})
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil, fmt.Errorf("non deadline context given")
+	}
+
+	rj, err := json.Marshal(&api.JSApiConsumerGetNextRequest{Batch: 1, Expires: time.Until(deadline)})
 	if err != nil {
 		workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
 		return nil, err
 	}
 
-	rctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
-	msg, err := s.nc.RequestWithContext(rctx, qc.NextSubject(), rj)
+	msg, err := s.nc.RequestWithContext(ctx, qc.NextSubject(), rj)
 	if err != nil {
+		s.log.Errorf("Polling failed: %v", err)
 		workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
 		return nil, err
 	}
-
 	status := msg.Header.Get("Status")
 	if status == "404" || status == "409" {
 		return nil, nil
@@ -231,17 +240,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 	return item, nil
 }
 
-func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) error {
-	var err error
-
-	if q.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-
-	if q.Priority == 0 {
-		q.Priority = DefaultPriority
-	}
-
+func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) error {
 	if q.MaxTries == 0 {
 		q.MaxTries = DefaultMaxTries
 	}
@@ -254,14 +253,11 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 		q.MaxConcurrent = DefaultQueueMaxConcurrent
 	}
 
-	if q.Priority > 10 || q.Priority < 1 {
-		return fmt.Errorf("invalid priority %d on queue %s, must be between 1 and 10", q.Priority, q.Name)
-	}
-
 	opts := []jsm.StreamOption{
 		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name)),
 		jsm.WorkQueueRetention(),
 		jsm.Replicas(replicas),
+		jsm.StreamDescription("Choria Async Jobs Work Queue"),
 	}
 
 	if memory {
@@ -271,17 +267,21 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 	}
 	if q.MaxAge > 0 {
 		opts = append(opts, jsm.MaxAge(q.MaxAge))
+	} else {
+		opts = append(opts, jsm.MaxAge(0))
 	}
 	if q.MaxEntries > 0 {
 		opts = append(opts, jsm.MaxMessages(int64(q.MaxEntries)))
 	}
 	if q.DiscardOld {
 		opts = append(opts, jsm.DiscardOld())
+	} else {
+		opts = append(opts, jsm.DiscardNew())
 	}
 
-	s.mu.Lock()
+	var err error
+
 	s.qStreams[q.Name], err = s.mgr.LoadOrNewStream(fmt.Sprintf(WorkStreamNamePattern, q.Name), opts...)
-	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -293,15 +293,96 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 		jsm.AcknowledgeExplicit(),
 		jsm.MaxDeliveryAttempts(q.MaxTries),
 	}
-	s.mu.Lock()
 	s.qConsumers[q.Name], err = s.qStreams[q.Name].LoadOrNewConsumer("WORKERS", wopts...)
-	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return s.updateQueueSettings(q)
+}
 
+func (s *jetStreamStorage) updateQueueSettings(q *Queue) error {
+	ss, sok := s.qStreams[q.Name]
+	sc, cok := s.qConsumers[q.Name]
+	if !sok || !cok {
+		return fmt.Errorf("unknown queue %s", q.Name)
+	}
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	q.MaxRunTime = sc.AckWait()
+	q.MaxConcurrent = sc.MaxAckPending()
+	q.MaxTries = sc.MaxDeliver()
+	q.DiscardOld = ss.Configuration().Discard == api.DiscardOld
+	q.MaxAge = ss.MaxAge()
+	q.MaxEntries = int(ss.MaxMsgs())
+
+	return nil
+}
+
+func (s *jetStreamStorage) joinQueue(q *Queue) error {
+	var err error
+
+	s.qStreams[q.Name], err = s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, q.Name))
+	if err != nil {
+		if jsm.IsNatsError(err, 10059) {
+			return fmt.Errorf("work queue not found")
+		}
+		return err
+	}
+
+	s.qConsumers[q.Name], err = s.qStreams[q.Name].LoadConsumer("WORKERS")
+	if err != nil {
+		if jsm.IsNatsError(err, 10014) {
+			return fmt.Errorf("work queue consumer not found")
+		}
+		return err
+	}
+
+	return s.updateQueueSettings(q)
+}
+
+func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) error {
+	if q.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if q.NoCreate {
+		return s.joinQueue(q)
+	}
+
+	return s.createQueue(q, replicas, memory)
+}
+
+func (s *jetStreamStorage) TasksInfo() (*TasksInfo, error) {
+	res := &TasksInfo{
+		Time: time.Now().UTC(),
+	}
+
+	var err error
+	res.Stream, err = s.tasks.stream.Information()
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (s *jetStreamStorage) DeleteTaskByID(id string) error {
+	msg, err := s.tasks.stream.ReadLastMessageForSubject(fmt.Sprintf(TasksStreamSubjectPattern, id))
+	if err != nil {
+		if jsm.IsNatsError(err, 10037) {
+			return fmt.Errorf("task not found")
+		}
+
+		return err
+	}
+
+	return s.tasks.stream.DeleteMessage(msg.Sequence)
 }
 
 func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
@@ -334,6 +415,7 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 		jsm.Subjects(TasksStreamSubjects),
 		jsm.MaxMessagesPerSubject(1),
 		jsm.Replicas(replicas),
+		jsm.StreamDescription("Choria Async Jobs Tasks"),
 	}
 
 	if memory {
@@ -351,6 +433,142 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 	}
 
 	return nil
+}
+
+// PurgeQueue removes all work items from the named work queue
+func (s *jetStreamStorage) PurgeQueue(name string) error {
+	stream, err := s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, name))
+	if err != nil {
+		return err
+	}
+
+	return stream.Purge()
+}
+
+// QueueInfo loads information for a named queue
+func (s *jetStreamStorage) QueueInfo(name string) (*QueueInfo, error) {
+	nfo := &QueueInfo{
+		Name: name,
+		Time: time.Now().UTC(),
+	}
+
+	stream, err := s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, name))
+	if err != nil {
+		return nil, err
+	}
+	consumer, err := stream.LoadConsumer("WORKERS")
+	if err != nil {
+		return nil, err
+	}
+
+	nfo.Stream, err = stream.LatestInformation()
+	if err != nil {
+		return nil, err
+	}
+	cs, err := consumer.LatestState()
+	if err != nil {
+		return nil, err
+	}
+	nfo.Consumer = &cs
+
+	return nfo, err
+}
+
+// QueueNames finds all known queues in the storage
+func (s *jetStreamStorage) QueueNames() ([]string, error) {
+	var result []string
+
+	names, err := s.mgr.StreamNames(&jsm.StreamNamesFilter{Subject: WorkStreamSubjectWildcard})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name := range names {
+		result = append(result, strings.TrimPrefix(name, WorkStreamNamePrefix))
+	}
+
+	return result, nil
+}
+
+// Queues load full information for every found queue
+func (s *jetStreamStorage) Queues() ([]*QueueInfo, error) {
+	var result []*QueueInfo
+
+	names, err := s.QueueNames()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name := range names {
+		nfo, err := s.QueueInfo(name)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nfo)
+	}
+
+	return result, nil
+}
+
+func (s *jetStreamStorage) TasksStore() (*jsm.Manager, *jsm.Stream, error) {
+	return s.tasks.mgr, s.tasks.stream, nil
+}
+
+func (s *jetStreamStorage) Tasks(ctx context.Context, limit int32) (chan *Task, error) {
+	nfo, err := s.tasks.stream.State()
+	if err != nil {
+		return nil, err
+	}
+	if nfo.Msgs == 0 {
+		return nil, fmt.Errorf("no tasks found")
+	}
+
+	out := make(chan *Task, limit)
+	cnt := int32(0)
+
+	timeout, cancel := context.WithTimeout(ctx, time.Minute)
+
+	sub, err := s.nc.Subscribe(s.nc.NewRespInbox(), func(msg *nats.Msg) {
+		if len(msg.Data) > 0 {
+			task := &Task{}
+			err := json.Unmarshal(msg.Data, task)
+			if err != nil {
+				return
+			}
+
+			select {
+			case out <- task:
+				md, err := msg.Metadata()
+				if err != nil {
+					return
+				}
+				done := atomic.AddInt32(&cnt, 1)
+				if md.NumPending == 0 || done == limit {
+					msg.Sub.Unsubscribe()
+					cancel()
+				}
+			default:
+				msg.Sub.Unsubscribe()
+				cancel()
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.tasks.stream.NewConsumer(jsm.DeliverAllAvailable(), jsm.DeliverySubject(sub.Subject))
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		<-timeout.Done()
+		close(out)
+		sub.Unsubscribe()
+	}()
+
+	return out, nil
 }
 
 const (

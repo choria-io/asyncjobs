@@ -24,13 +24,14 @@ type HandlerFunc func(ctx context.Context, t *Task) (interface{}, error)
 // Note: this will change to be nearer to a server mux and include support for middleware
 type Mux struct {
 	hf map[string]HandlerFunc
-	mu sync.Mutex
+	mu *sync.Mutex
 }
 
 // NewTaskRouter creates a new Mux
 func NewTaskRouter() *Mux {
 	return &Mux{
 		hf: map[string]HandlerFunc{},
+		mu: &sync.Mutex{},
 	}
 }
 
