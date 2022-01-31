@@ -31,7 +31,8 @@ var (
 	// RetryDefault is the default retry policy
 	RetryDefault = RetryLinearTenMinutes
 
-	retryForTesting = linearPolicy(1, 0.1, time.Millisecond, 10*time.Millisecond)
+	retryLinearTenSeconds = linearPolicy(20, 0.1, 500*time.Millisecond, 10*time.Second)
+	retryForTesting       = linearPolicy(1, 0.1, time.Millisecond, 10*time.Millisecond)
 )
 
 func (b RetryPolicy) Duration(n int) time.Duration {

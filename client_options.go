@@ -50,10 +50,6 @@ func NatsConn(nc *nats.Conn) ClientOpt {
 // PrometheusListenPort enables prometheus listening on a specific port
 func PrometheusListenPort(port int) ClientOpt {
 	return func(copts *ClientOpts) error {
-		if port == 0 {
-			return fmt.Errorf("port is required")
-		}
-
 		copts.statsPort = port
 		return nil
 	}

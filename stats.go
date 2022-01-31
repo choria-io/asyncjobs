@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	PrometheusNamespace = "jsasj"
+	PrometheusNamespace = "choria_async_jobs"
 
 	enqueueCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(PrometheusNamespace, "queues", "enqueue_count"),
