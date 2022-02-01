@@ -11,6 +11,8 @@ during the lifecycle.
 
 Different types of task can be stored in one Queue, a single process can attach to a single Queue.
 
+This is heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
+
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
@@ -46,10 +48,10 @@ JetStream enables, so there might be some churn in the feature set here.
 
 ### Processing
 
-* Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`
+* Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`. Handler opt-in early termination.
 * Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
 * Worker crashes does not impact the work queue
-* Handler interface with middleware (planned, mux is super minimal and needs a rego)
+* Handler interface with middleware to select appropriate handler by task type with wildcard matches (middleware planned)
 * Statistics via Prometheus using `PrometheusListenPort()`
 * Real time lifecycle events (planned)
 
@@ -63,13 +65,18 @@ JetStream enables, so there might be some churn in the feature set here.
 * Task Scheduling via external Scheduler
 * Supports custom loggers, defaulting to go internal `log`
 
+### Command Line
+
+* Various info and state requests
+* Configure aspects of Task and Queue storage
+* Watch task processing
+* Process tasks via shell commands
+* CRUD on Tasks store or individual Task
+
 ## Planned Features
 
 * REST Service for enqueuing
 * Explore options for other languages, for example delegating the execution of a task over nats core request-reply
-* A CLI that can configure some aspects of queues like max concurrency etc, view tasks, view events etc
-* A CLI to enqueue jobs
-* A CLI that can listen on queues and execute local scripts
 * A scheduler service that creates tasks on a schedule
 * Multiple queues with different priorities accessible in the same client
 

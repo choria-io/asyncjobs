@@ -7,11 +7,11 @@ package asyncjobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/nats-io/jsm.go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -68,9 +68,12 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
 		workQueueEntryForUnknownTaskErrorCounter.WithLabelValues(p.queue.Name).Inc()
-		if jsm.IsNatsError(err, 10037) {
-			return fmt.Errorf("task not found")
+		if errors.Is(err, ErrTaskNotFound) {
+			p.log.Warnf("Could not find task data for %s, discarding work item", item.JobID)
+			p.c.storage.TerminateItem(ctx, item)
+			return nil
 		}
+
 		return fmt.Errorf("loading failed: %s", err)
 	}
 
@@ -112,6 +115,7 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 			return nil, ctx.Err()
 		}
 
+		workQueuePollCounter.WithLabelValues(p.queue.Name).Inc()
 		timeout, cancel := context.WithTimeout(ctx, time.Minute)
 		item, err := p.c.storage.PollQueue(timeout, p.queue)
 		cancel()
@@ -154,7 +158,6 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 	for {
 		select {
 		case <-p.limiter:
-			workQueuePollCounter.WithLabelValues(p.queue.Name).Inc()
 			item, err := p.pollItem(ctx)
 			if err != nil {
 				if err == context.DeadlineExceeded {
@@ -208,16 +211,32 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 
 	payload, err := p.mux.Handler(t)(timeout, t)
 	if err != nil {
-		handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()
-		p.log.Errorf("Handling task %s failed: %s", t.ID, err)
-		err = p.c.handleTaskError(ctx, t, err)
-		if err != nil {
-			p.log.Warnf("Updating task after failed processing failed: %v", err)
-		}
+		if errors.Is(err, ErrTerminateTask) {
+			handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()
+			p.log.Errorf("Handling task %s failed, terminating retries: %s", t.ID, err)
 
-		err = p.c.storage.NakItem(ctx, item)
-		if err != nil {
-			p.log.Warnf("NaK after failed processing failed: %v", err)
+			err = p.c.handleTaskTerminated(ctx, t, err)
+			if err != nil {
+				p.log.Warnf("Updating task after failed processing failed: %v", err)
+			}
+
+			err = p.c.storage.TerminateItem(ctx, item)
+			if err != nil {
+				p.log.Warnf("Term after failed processing failed: %v", err)
+			}
+		} else {
+			handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()
+			p.log.Errorf("Handling task %s failed: %s", t.ID, err)
+
+			err = p.c.handleTaskError(ctx, t, err)
+			if err != nil {
+				p.log.Warnf("Updating task after failed processing failed: %v", err)
+			}
+
+			err = p.c.storage.NakItem(ctx, item)
+			if err != nil {
+				p.log.Warnf("NaK after failed processing failed: %v", err)
+			}
 		}
 
 		return

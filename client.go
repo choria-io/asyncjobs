@@ -6,6 +6,7 @@ package asyncjobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -28,11 +29,21 @@ type Client struct {
 	log Logger
 }
 
+var (
+	// ErrTaskNotFound is the error indicating a task does not exist rather than a failure to load
+	ErrTaskNotFound = errors.New("task not found")
+	// ErrQueueNotFound is the error indicating a queue does not exist rather than a failure to load
+	ErrQueueNotFound = errors.New("queue not found")
+	// ErrTerminateTask indicates that a task failed, and no further processing attempts should be made
+	ErrTerminateTask = fmt.Errorf("terminate task")
+)
+
 type Storage interface {
 	SaveTaskState(ctx context.Context, task *Task) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
 	AckItem(ctx context.Context, item *ProcessItem) error
 	NakItem(ctx context.Context, item *ProcessItem) error
+	TerminateItem(ctx context.Context, item *ProcessItem) error
 	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)
 	PrepareQueue(q *Queue, replicas int, memory bool) error
 	PrepareTasks(memory bool, replicas int, retention time.Duration) error
@@ -46,6 +57,7 @@ type StorageAdmin interface {
 	QueueNames() ([]string, error)
 	QueueInfo(name string) (*QueueInfo, error)
 	PurgeQueue(name string) error
+	DeleteQueue(name string) error
 	PrepareQueue(q *Queue, replicas int, memory bool) error
 	PrepareTasks(memory bool, replicas int, retention time.Duration) error
 	TasksInfo() (*TasksInfo, error)
@@ -161,6 +173,14 @@ func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{
 		Payload:     payload,
 		CompletedAt: time.Now().UTC(),
 	}
+
+	return c.storage.SaveTaskState(ctx, t)
+}
+
+func (c *Client) handleTaskTerminated(ctx context.Context, t *Task, err error) error {
+	t.LastErr = err.Error()
+	t.LastTriedAt = nowPointer()
+	t.State = TaskStateTerminated
 
 	return c.storage.SaveTaskState(ctx, t)
 }

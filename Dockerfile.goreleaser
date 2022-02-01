@@ -1,0 +1,6 @@
+# use goreleaser to build
+
+FROM alpine:latest
+
+ENTRYPOINT ["/usr/bin/ajc"]
+COPY ajc /usr/bin/ajc

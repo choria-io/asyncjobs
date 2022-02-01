@@ -1,0 +1,68 @@
+project_name: asyncjobs
+
+release:
+  github:
+    owner: choria-io
+    name: asyncjobs
+  name_template: "Release {{.Version}}"
+  draft: true
+
+changelog:
+  skip: true
+
+builds:
+  - main: ./ajc
+    id: ajc
+    binary: ajc
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - "6"
+      - "7"
+
+archives:
+  - name_template: "asyncjobs-{{.Version}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}"
+    wrap_in_directory: true
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+dockers:
+  - goos: linux
+    goarch: amd64
+    skip_push: true
+    dockerfile: Dockerfile.goreleaser
+    image_templates:
+      - "choria/asyncjobs:latest"
+      - "choria/asyncjobs:{{ .Version }}"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
+checksum:
+  name_template: "SHA256SUMS"
+  algorithm: sha256
+
+nfpms:
+  - file_name_template: 'asyncjobs-{{.Version}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}'
+    homepage:  https://github.com/choria-io/asyncjobs
+    description: Choria Asynchronous Jobs CLI
+    maintainer: R.I. Pienaar <rip@devco.net>
+    license: Apache 2.0
+    vendor: Choria
+    formats:
+      - deb
+      - rpm

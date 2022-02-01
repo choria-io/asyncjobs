@@ -27,6 +27,8 @@ const (
 	TaskStateRetry TaskState = "retry"
 	// TaskStateExpired tasks that reached their deadline
 	TaskStateExpired TaskState = "expired"
+	// TaskStateTerminated indicates that the task was terminated via the ErrTerminateTask error
+	TaskStateTerminated TaskState = "terminated"
 	// TaskStateCompleted tasks that are completed
 	TaskStateCompleted TaskState = "complete"
 	// TaskStateQueueError tasks that could not have their associated Work Queue item created

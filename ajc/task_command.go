@@ -36,9 +36,9 @@ type taskCommand struct {
 }
 
 func configureTaskCommand(app *kingpin.Application) {
-	c := taskCommand{}
+	c := &taskCommand{}
 
-	tasks := app.Command("task", "Manage Tasks").Alias("t")
+	tasks := app.Command("tasks", "Manage Tasks").Alias("t").Alias("task")
 
 	add := tasks.Command("add", "Adds a new Task to a queue").Alias("new").Alias("a").Alias("enqueue").Action(c.addAction)
 	add.Arg("type", "The task type").Required().StringVar(&c.ttype)
@@ -60,15 +60,74 @@ func configureTaskCommand(app *kingpin.Application) {
 	purge := tasks.Command("purge", "Purge all entries from the Tasks store").Action(c.purgeAction)
 	purge.Flag("force", "Force purge without prompting").Short('f').BoolVar(&c.force)
 
-	config := tasks.Command("configure", "Configures the Task storage").Alias("cfg").Action(c.configAction)
+	config := tasks.Command("configure", "Configures the Task storage").Alias("config").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
 
+	tasks.Command("watch", "Watch job updates in real time").Action(c.watchAction)
+
 	process := tasks.Command("process", "Process Tasks from a given queue").Action(c.processAction)
-	process.Arg("type", "Types of Tasks to process").Required().Envar("PROCESS_TYPE").StringVar(&c.ttype)
-	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("PROCESS_QUEUE").StringVar(&c.queue)
-	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("PROCESS_CONCURRENCY").IntVar(&c.concurrency)
-	process.Arg("command", "The command to invoke for each Task").Required().Envar("PROCESS_COMMAND").ExistingFileVar(&c.command)
+	process.Arg("type", "Types of Tasks to process").Required().Envar("AJC_TYPE").StringVar(&c.ttype)
+	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("AJC_QUEUE").StringVar(&c.queue)
+	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
+	process.Arg("command", "The command to invoke for each Task").Required().Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
+}
+
+func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
+	err := prepare()
+	if err != nil {
+		return err
+	}
+
+	mgr, stream, err := admin.TasksStore()
+	if err != nil {
+		return err
+	}
+
+	nc := mgr.NatsConn()
+	sub, err := mgr.NatsConn().SubscribeSync(nc.NewRespInbox())
+	if err != nil {
+		return err
+	}
+
+	_, err = stream.NewConsumer(jsm.StartWithLastReceived(), jsm.DeliverySubject(sub.Subject), jsm.AcknowledgeNone(), jsm.PushFlowControl(), jsm.IdleHeartbeat(time.Minute))
+	if err != nil {
+		return err
+	}
+
+	for {
+		msg, err := sub.NextMsg(time.Hour)
+		if err != nil {
+			return err
+		}
+
+		if len(msg.Data) == 0 {
+			if msg.Reply != "" {
+				msg.Respond(nil)
+			}
+
+			continue
+		}
+
+		task := &asyncjobs.Task{}
+		err = json.Unmarshal(msg.Data, task)
+		if err != nil {
+			fmt.Printf("Invalid task update received: %v: %q\n", err, msg.Data)
+			continue
+		}
+
+		ts := time.Now()
+		if task.LastTriedAt != nil && !task.LastTriedAt.IsZero() {
+			ts = *task.LastTriedAt
+		}
+
+		if task.LastErr == "" {
+			fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", ts.Format("15:04:05"), task.ID, task.Queue, task.Type, task.Tries, task.State)
+		} else {
+			fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", ts.Format("15:04:05"), task.ID, task.Queue, task.Type, task.Tries, task.State, task.LastErr)
+		}
+
+	}
 }
 
 func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
@@ -174,7 +233,14 @@ func (c *taskCommand) configAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	return infoAction(nil)
+	store, err := admin.TasksInfo()
+	if err != nil {
+		return err
+	}
+
+	showTasks(store)
+
+	return nil
 }
 
 func (c *taskCommand) lsAction(_ *kingpin.ParseContext) error {
@@ -188,11 +254,6 @@ func (c *taskCommand) lsAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	tasks, err := admin.Tasks(context.Background(), int32(c.limit))
-	if err != nil {
-		return err
-	}
-
 	var table *tablewriter.Table
 	if nfo.Stream.State.Msgs > uint64(c.limit) {
 		table = newTableWriter(fmt.Sprintf("%d of %d Tasks", c.limit, nfo.Stream.State.Msgs))
@@ -201,8 +262,13 @@ func (c *taskCommand) lsAction(_ *kingpin.ParseContext) error {
 	}
 	table.AddHeaders("ID", "Type", "Created", "State", "Queue", "Tries")
 
+	tasks, err := admin.Tasks(context.Background(), int32(c.limit))
+	if err != nil {
+		return err
+	}
+
 	for task := range tasks {
-		table.AddRow(task.ID, task.Type, task.CreatedAt.Format(time.RFC822), task.State, task.Queue, task.Tries)
+		table.AddRow(task.ID, task.Type, task.CreatedAt.Format(timeFormat), task.State, task.Queue, task.Tries)
 	}
 
 	fmt.Println(table.Render())
@@ -248,7 +314,7 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 		return nil
 	}
 
-	fmt.Printf("Task %s created at %s\n\n", task.ID, task.CreatedAt.Format(time.RFC822))
+	fmt.Printf("Task %s created at %s\n\n", task.ID, task.CreatedAt.Format(timeFormat))
 	fmt.Printf("              Payload: %s\n", humanize.IBytes(uint64(len(task.Payload))))
 	fmt.Printf("               Status: %s\n", task.State)
 	if task.Queue != "" {
@@ -256,13 +322,13 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	}
 	fmt.Printf("                Tries: %d\n", task.Tries)
 	if task.LastTriedAt != nil {
-		fmt.Printf("       Last Processed: %s\n", task.LastTriedAt.Format(time.RFC822))
+		fmt.Printf("       Last Processed: %s\n", task.LastTriedAt.Format(timeFormat))
 	}
 	if task.LastErr != "" {
 		fmt.Printf("           Last Error: %s\n", task.LastErr)
 	}
 	if task.Deadline != nil {
-		fmt.Printf("  Scheduling Deadline: %s\n", task.Deadline.Format(time.RFC822))
+		fmt.Printf("  Scheduling Deadline: %s\n", task.Deadline.Format(timeFormat))
 	}
 
 	return nil
