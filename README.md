@@ -11,9 +11,9 @@ during the lifecycle.
 
 Different types of task can be stored in one Queue, a single process can attach to a single Queue.
 
-This is heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
-
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable.
+
+This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
 
@@ -62,7 +62,6 @@ JetStream enables, so there might be some churn in the feature set here.
 ### Misc
 
 * Supports NATS Contexts for connection configuration
-* Task Scheduling via external Scheduler
 * Supports custom loggers, defaulting to go internal `log`
 
 ### Command Line
@@ -77,7 +76,7 @@ JetStream enables, so there might be some churn in the feature set here.
 
 * REST Service for enqueuing
 * Explore options for other languages, for example delegating the execution of a task over nats core request-reply
-* A scheduler service that creates tasks on a schedule
+* A scheduler service that creates tasks on a schedule with scheduled stored in JetStream
 * Multiple queues with different priorities accessible in the same client
 
 ## Example
