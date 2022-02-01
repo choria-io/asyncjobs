@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	Version    = "development"
+	version    = "development"
 	timeFormat = "02 Jan 06 15:04:05 MST"
 
 	nctx   string
@@ -26,7 +26,7 @@ var (
 
 func main() {
 	caj = kingpin.New("ajc", "Choria Asynchronous Jobs")
-	caj.Version(Version)
+	caj.Version(version)
 	caj.Author("R.I.Pienaar <rip@devco.net>")
 
 	caj.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)

@@ -25,6 +25,7 @@ type ClientOpts struct {
 	nc            *nats.Conn
 }
 
+// ClientOpt configures the client
 type ClientOpt func(opts *ClientOpts) error
 
 // CustomLogger sets a custom logger to use for all logging

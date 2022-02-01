@@ -39,7 +39,7 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 
 	conn := []nats.Option{
 		nats.MaxReconnects(10),
-		nats.Name("Choria Asynchronous Jobs CLI Version " + Version),
+		nats.Name("Choria Asynchronous Jobs CLI version " + version),
 		nats.ErrorHandler(func(nc *nats.Conn, _ *nats.Subscription, err error) {
 			url := nc.ConnectedUrl()
 			if url == "" {
