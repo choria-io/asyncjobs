@@ -10,14 +10,19 @@ dealing with scheduling, retries, acknowledgements and more of the Work Queue it
 during the lifecycle.
 
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable. Job
-handlers are implemented in Go and are horizontally and vertically scalable.
+handlers are implemented in Go with one process hosting one or many handlers. Per process concurrency and overall per-queue
+concurrency controls exist.
 
 This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
  * [Status](#status)
  * [Features](#features)
  * [Examples](https://github.com/choria-io/asyncjobs/blob/main/client_examples_test.go)
- * [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
+ 
+ [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
+ [![Go Report Card](https://goreportcard.com/badge/github.com/choria-io/asyncjobs)](https://goreportcard.com/report/github.com/choria-io/asyncjobs) 
+ [![CodeQL](https://github.com/choria-io/asyncjobs/workflows/CodeQL/badge.svg)](https://goreportcard.com/report/github.com/choria-io/asyncjobs) 
+ [![Unit Tests](https://github.com/choria-io/asyncjobs/actions/workflows/test.yaml/badge.svg)](https://github.com/choria-io/asyncjobs/actions/workflows/test.yaml)
 
 ## Status
 
