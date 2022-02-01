@@ -38,7 +38,7 @@ var (
 
 	workQueuePollCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(PrometheusNamespace, "queues", "poll_total"),
-		Help: "The number of times a specific queue was polled - influenced by priority",
+		Help: "The number of times a specific queue was polled",
 	}, []string{"queue"})
 
 	workQueuePollErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -49,7 +49,7 @@ var (
 	taskUpdateCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(PrometheusNamespace, "tasks", "task_update_total"),
 		Help: "The number of task updates that succeeded",
-	}, []string{})
+	}, []string{"state"})
 
 	taskUpdateErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(PrometheusNamespace, "tasks", "task_update_error_total"),

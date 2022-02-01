@@ -27,6 +27,51 @@ var _ = Describe("Processor", func() {
 	AfterEach(func() { cancel() })
 
 	Describe("handler", func() {
+		It("Should handler termination errors and terminate the item", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				wg := sync.WaitGroup{}
+				wg.Add(1)
+
+				router := NewTaskRouter()
+				router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+					wg.Done()
+					return nil, fmt.Errorf("simulated failure: %w", ErrTerminateTask)
+				})
+
+				// intercept the ack
+				sub, err := nc.SubscribeSync("$JS.ACK.CHORIA_AJ_Q_DEFAULT.WORKERS.>")
+				Expect(err).ToNot(HaveOccurred())
+
+				go client.Run(ctx, router)
+
+				wg.Wait()
+				time.Sleep(50 * time.Millisecond)
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateTerminated))
+				Expect(task.Tries).To(Equal(1))
+
+				msg, err := sub.NextMsg(time.Second)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(msg.Data)).To(Equal("+TERM"))
+
+				nfo, err := client.StorageAdmin().QueueInfo(client.opts.queue.Name)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nfo.Stream.State.Msgs).To(Equal(uint64(0)))
+			})
+		})
+
 		It("Should handle handler errors and update the task and NaK the item", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 				client, err := NewClient(NatsConn(nc))
@@ -111,7 +156,7 @@ var _ = Describe("Processor", func() {
 	})
 
 	Describe("processMessage", func() {
-		It("Should handle tasks that do not exist", func() {
+		It("Should handle tasks that do not exist by terminating the item", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 				client, err := NewClient(NatsConn(nc))
 				Expect(err).ToNot(HaveOccurred())
@@ -125,7 +170,11 @@ var _ = Describe("Processor", func() {
 				<-proc.limiter
 
 				err = proc.processMessage(ctx, &ProcessItem{JobID: "does.not.exist"})
-				Expect(err).To(MatchError("task not found"))
+				Expect(err).ToNot(HaveOccurred())
+
+				nfo, err := client.storage.QueueInfo("DEFAULT")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nfo.Stream.State.Msgs).To(Equal(uint64(0)))
 			})
 		})
 

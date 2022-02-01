@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/nats-io/jsm.go"
@@ -26,6 +27,7 @@ var _ = Describe("Storage", func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
+		log.SetOutput(GinkgoWriter)
 	})
 
 	AfterEach(func() { cancel() })
@@ -227,7 +229,7 @@ var _ = Describe("Storage", func() {
 				stream := storage.qStreams[q.Name]
 
 				Expect(stream.Name()).To(Equal(fmt.Sprintf(WorkStreamNamePattern, q.Name)))
-				Expect(stream.Subjects()).To(Equal([]string{fmt.Sprintf(WorkStreamSubjectPattern, q.Name)}))
+				Expect(stream.Subjects()).To(Equal([]string{fmt.Sprintf(WorkStreamSubjectPattern, q.Name, ">")}))
 				Expect(stream.Retention()).To(Equal(api.WorkQueuePolicy))
 				Expect(stream.Storage()).To(Equal(api.FileStorage))
 

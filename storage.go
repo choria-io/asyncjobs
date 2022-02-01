@@ -28,8 +28,8 @@ const (
 	TasksStreamSubjectPattern = "CHORIA_AJ.T.%s"
 
 	WorkStreamNamePattern     = "CHORIA_AJ_Q_%s" // individual work queues
-	WorkStreamSubjectPattern  = "CHORIA_AJ.Q.%s"
-	WorkStreamSubjectWildcard = "CHORIA_AJ.Q.*"
+	WorkStreamSubjectPattern  = "CHORIA_AJ.Q.%s.%s"
+	WorkStreamSubjectWildcard = "CHORIA_AJ.Q.>"
 	WorkStreamNamePrefix      = "CHORIA_AJ_Q_"
 )
 
@@ -115,7 +115,7 @@ func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error 
 	task.storageOptions = &taskMeta{seq: ack.Sequence}
 	task.mu.Unlock()
 
-	taskUpdateCounter.WithLabelValues().Inc()
+	taskUpdateCounter.WithLabelValues(string(task.State)).Inc()
 
 	return nil
 
@@ -132,7 +132,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 		return err
 	}
 
-	msg := nats.NewMsg(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name))
+	msg := nats.NewMsg(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name, task.Type))
 	msg.Header.Add(api.JSMsgId, task.ID) // dedupe on the queue, though should not be needed
 	msg.Data = ji
 	ret, err := s.nc.RequestMsgWithContext(ctx, msg)
@@ -166,6 +166,14 @@ func (s *jetStreamStorage) AckItem(ctx context.Context, item *ProcessItem) error
 	}
 
 	return item.storageMeta.(*nats.Msg).Ack(nats.Context(ctx))
+}
+
+func (s *jetStreamStorage) TerminateItem(ctx context.Context, item *ProcessItem) error {
+	if item.storageMeta == nil {
+		return fmt.Errorf("invalid storage item")
+	}
+
+	return item.storageMeta.(*nats.Msg).Term(nats.Context(ctx))
 }
 
 func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error {
@@ -259,7 +267,7 @@ func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) erro
 	}
 
 	opts := []jsm.StreamOption{
-		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name)),
+		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name, ">")),
 		jsm.WorkQueueRetention(),
 		jsm.Replicas(replicas),
 		jsm.StreamDescription("Choria Async Jobs Work Queue"),
@@ -381,9 +389,8 @@ func (s *jetStreamStorage) DeleteTaskByID(id string) error {
 	msg, err := s.tasks.stream.ReadLastMessageForSubject(fmt.Sprintf(TasksStreamSubjectPattern, id))
 	if err != nil {
 		if jsm.IsNatsError(err, 10037) {
-			return fmt.Errorf("task not found")
+			return ErrTaskNotFound
 		}
-
 		return err
 	}
 
@@ -393,6 +400,9 @@ func (s *jetStreamStorage) DeleteTaskByID(id string) error {
 func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
 	msg, err := s.tasks.stream.ReadLastMessageForSubject(fmt.Sprintf(TasksStreamSubjectPattern, id))
 	if err != nil {
+		if jsm.IsNatsError(err, 10037) {
+			return nil, ErrTaskNotFound
+		}
 		return nil, err
 	}
 
@@ -440,10 +450,26 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 	return nil
 }
 
+// DeleteQueue removes a queue and all its items
+func (s *jetStreamStorage) DeleteQueue(name string) error {
+	stream, err := s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, name))
+	if err != nil {
+		if jsm.IsNatsError(err, 10059) {
+			return ErrQueueNotFound
+		}
+		return err
+	}
+
+	return stream.Delete()
+}
+
 // PurgeQueue removes all work items from the named work queue
 func (s *jetStreamStorage) PurgeQueue(name string) error {
 	stream, err := s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, name))
 	if err != nil {
+		if jsm.IsNatsError(err, 10059) {
+			return ErrQueueNotFound
+		}
 		return err
 	}
 
@@ -459,6 +485,9 @@ func (s *jetStreamStorage) QueueInfo(name string) (*QueueInfo, error) {
 
 	stream, err := s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, name))
 	if err != nil {
+		if jsm.IsNatsError(err, 10059) {
+			return nil, ErrQueueNotFound
+		}
 		return nil, err
 	}
 	consumer, err := stream.LoadConsumer("WORKERS")

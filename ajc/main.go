@@ -13,16 +13,15 @@ import (
 )
 
 var (
-	Version = "development"
+	Version    = "development"
+	timeFormat = "02 Jan 06 15:04:05 MST"
 
-	nctx  string
-	debug bool
-	log   *logrus.Entry
-
+	nctx   string
+	debug  bool
+	log    *logrus.Entry
 	client *asyncjobs.Client
 	admin  asyncjobs.StorageAdmin
-
-	caj *kingpin.Application
+	caj    *kingpin.Application
 )
 
 func main() {
@@ -31,10 +30,11 @@ func main() {
 	caj.Author("R.I.Pienaar <rip@devco.net>")
 
 	caj.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)
-	caj.Flag("debug", "Enable debug logging").BoolVar(&debug)
+	caj.Flag("debug", "Enable debug level logging").Envar("AJC_DEBUG").BoolVar(&debug)
 
 	configureInfoCommand(caj)
 	configureTaskCommand(caj)
+	configureQueueCommand(caj)
 
 	kingpin.MustParse(caj.Parse(os.Args[1:]))
 }

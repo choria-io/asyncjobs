@@ -7,6 +7,8 @@ package asyncjobs
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -16,6 +18,11 @@ type Handler interface {
 	ProcessTask(ctx context.Context, t *Task) (interface{}, error)
 }
 
+type entryHandler struct {
+	ttype string
+	hf    HandlerFunc
+}
+
 // HandlerFunc handles a single task, the response bytes will be stored in the original task
 type HandlerFunc func(ctx context.Context, t *Task) (interface{}, error)
 
@@ -23,16 +30,22 @@ type HandlerFunc func(ctx context.Context, t *Task) (interface{}, error)
 //
 // Note: this will change to be nearer to a server mux and include support for middleware
 type Mux struct {
-	hf map[string]HandlerFunc
-	mu *sync.Mutex
+	hf  map[string]*entryHandler
+	ehf []*entryHandler
+	mu  *sync.Mutex
 }
 
 // NewTaskRouter creates a new Mux
 func NewTaskRouter() *Mux {
 	return &Mux{
-		hf: map[string]HandlerFunc{},
-		mu: &sync.Mutex{},
+		hf:  map[string]*entryHandler{},
+		ehf: []*entryHandler{},
+		mu:  &sync.Mutex{},
 	}
+}
+
+func notFoundHandler(_ context.Context, t *Task) (interface{}, error) {
+	return nil, fmt.Errorf("no handler for task type %s", t.Type)
 }
 
 // Handler looks up the handler function for a task
@@ -41,13 +54,17 @@ func (m *Mux) Handler(t *Task) HandlerFunc {
 	defer m.mu.Unlock()
 
 	hf, ok := m.hf[t.Type]
-	if !ok {
-		return func(ctx context.Context, t *Task) (interface{}, error) {
-			return nil, fmt.Errorf("no handler for task type %s", t.Type)
+	if ok {
+		return hf.hf
+	}
+
+	for _, hf := range m.ehf {
+		if strings.HasPrefix(t.Type, hf.ttype) {
+			return hf.hf
 		}
 	}
 
-	return hf
+	return notFoundHandler
 }
 
 // HandleFunc registers a task for a taskType. The taskType must match exactly with the matching tasks
@@ -60,7 +77,12 @@ func (m *Mux) HandleFunc(taskType string, h HandlerFunc) error {
 		return fmt.Errorf("already have a handler for type %s tasks", taskType)
 	}
 
-	m.hf[taskType] = h
+	m.hf[taskType] = &entryHandler{hf: h, ttype: taskType}
+	m.ehf = append(m.ehf, m.hf[taskType])
+
+	sort.Slice(m.ehf, func(i, j int) bool {
+		return len(m.ehf[i].ttype) > len(m.ehf[j].ttype)
+	})
 
 	return nil
 }
