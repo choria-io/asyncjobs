@@ -35,6 +35,7 @@ var (
 	retryForTesting       = linearPolicy(1, 0.1, time.Millisecond, 10*time.Millisecond)
 )
 
+// Duration is the period to sleep for try n, it includes a jitter
 func (b RetryPolicy) Duration(n int) time.Duration {
 	if n >= len(b.Intervals) {
 		n = len(b.Intervals) - 1
@@ -48,6 +49,7 @@ func (b RetryPolicy) Duration(n int) time.Duration {
 	return delay
 }
 
+// Sleep attempts to sleep for the relevant duration for n, interruptable by ctx
 func (b RetryPolicy) Sleep(ctx context.Context, n int) error {
 	timer := time.NewTimer(b.Duration(n))
 

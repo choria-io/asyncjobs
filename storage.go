@@ -23,14 +23,21 @@ import (
 )
 
 const (
-	TasksStreamName           = "CHORIA_AJ_TASKS" // stores tasks
-	TasksStreamSubjects       = "CHORIA_AJ.T.*"
+	// TasksStreamName is the name of the JetStream Stream storing tasks
+	TasksStreamName = "CHORIA_AJ_TASKS"
+	// TasksStreamSubjects is a NATS wildcard matching all tasks
+	TasksStreamSubjects = "CHORIA_AJ.T.*"
+	// TasksStreamSubjectPattern is the printf pattern that can be used to find an individual task by its task ID
 	TasksStreamSubjectPattern = "CHORIA_AJ.T.%s"
 
-	WorkStreamNamePattern     = "CHORIA_AJ_Q_%s" // individual work queues
-	WorkStreamSubjectPattern  = "CHORIA_AJ.Q.%s.%s"
+	// WorkStreamNamePattern is the printf pattern for determining JetStream Stream names per queue
+	WorkStreamNamePattern = "CHORIA_AJ_Q_%s"
+	// WorkStreamSubjectPattern is the printf pattern individual items are placed in, placeholders for JobID and JobType
+	WorkStreamSubjectPattern = "CHORIA_AJ.Q.%s.%s"
+	// WorkStreamSubjectWildcard is a NATS filter matching all enqueued items for any task store
 	WorkStreamSubjectWildcard = "CHORIA_AJ.Q.>"
-	WorkStreamNamePrefix      = "CHORIA_AJ_Q_"
+	// WorkStreamNamePrefix is the prefix that, when removed, reveals the queue name
+	WorkStreamNamePrefix = "CHORIA_AJ_Q_"
 )
 
 type jetStreamStorage struct {

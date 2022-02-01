@@ -16,8 +16,11 @@ import (
 )
 
 const (
-	DefaultJobRunTime         = time.Hour
-	DefaultMaxTries           = 10
+	// DefaultJobRunTime when not configured for a queue this is the default run-time handlers will get
+	DefaultJobRunTime = time.Hour
+	// DefaultMaxTries when not configured for a queue this is the default tries it will get
+	DefaultMaxTries = 10
+	// DefaultQueueMaxConcurrent when not configured for a queue this is the default concurrency setting
 	DefaultQueueMaxConcurrent = 100
 )
 
