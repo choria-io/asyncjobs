@@ -9,9 +9,8 @@ Each Task is stored in JetStream by a unique ID and Work Queue item is made refe
 dealing with scheduling, retries, acknowledgements and more of the Work Queue item.  The stored Task will be updated
 during the lifecycle.
 
-Different types of task can be stored in one Queue, a single process can attach to a single Queue.
-
-Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable.
+Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable. Job
+handlers are implemented in Go and are horizontally and vertically scalable.
 
 This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
@@ -75,10 +74,4 @@ JetStream enables, so there might be some churn in the feature set here.
 
 ## Planned Features
 
-* REST Service for enqueuing
-* Explore options for other languages, for example delegating the execution of a task over nats core request-reply
-* A scheduler service that creates tasks on a schedule with scheduled stored in JetStream
-* Multiple queues with different priorities accessible in the same client
-* Task DLQ for failed or expired task definitions, with various retention policies
-* Middleware support for task handlers like http muxes
-* Real time lifecycle events
+A number of features are planned in the near term, see our [GitHub Issues](https://github.com/choria-io/asyncjobs/labels/enhancement)
