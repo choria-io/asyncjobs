@@ -15,7 +15,10 @@ Multiple processes can process jobs concurrently, thus job processing is both ho
 
 This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
+ * [Status](#status)
+ * [Features](#features)
+ * [Examples](https://github.com/choria-io/asyncjobs/blob/main/client_examples_test.go)
+ * [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
 
 ## Status
 
@@ -31,8 +34,7 @@ JetStream enables, so there might be some churn in the feature set here.
 
 ### Tasks
 
-* Task definitions stored post-processing, with various retention policies client opt `TaskRetention()`
-* Task DLQ for failed or expired task definitions, with various retention policies (required more thought)
+* Task definitions stored post-processing, with various retention policies
 * Task deduplication
 * Deadline per task - after this time the task will not be processed
 * Max tries per task, capped to the queue tries
@@ -42,22 +44,21 @@ JetStream enables, so there might be some churn in the feature set here.
 ### Queues
 
 * Queues can store different types of task
-* Queues with caps on queued items and different queue-full behaviors (DiscardOld on queue, sets task to TaskStateQueueError)
+* Queues with caps on queued items and different queue-full behaviors
 * Default or user supplied queue definitions
 * Queue per client, many clients per queue
 
 ### Processing
 
 * Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`. Handler opt-in early termination.
-* Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis (queue.MaxConcurrent)
+* Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis
 * Worker crashes does not impact the work queue
-* Handler interface with middleware to select appropriate handler by task type with wildcard matches (middleware planned)
-* Statistics via Prometheus using `PrometheusListenPort()`
-* Real time lifecycle events (planned)
+* Handler interface with task router to select appropriate handler by task type with wildcard matches
+* Statistics via Prometheus
 
 ### Storage
 
-* Replicated storage using RAFT protocol, disk based or memory based using `MemoryStorage()`
+* Replicated storage using RAFT protocol within JetStream Streams, disk based or memory based
 
 ### Misc
 
@@ -78,77 +79,6 @@ JetStream enables, so there might be some churn in the feature set here.
 * Explore options for other languages, for example delegating the execution of a task over nats core request-reply
 * A scheduler service that creates tasks on a schedule with scheduled stored in JetStream
 * Multiple queues with different priorities accessible in the same client
-
-## Example
-
-Tasks are enqueued using the client, here we create a task with a map as payload, we set a deadline for 1 hour to 
-finish the task and enqueue it.
-
-The task is of type `example` and is placed in the `TEST` queue. This queue allows for up to 100 processing attempts
-with each attempt having up to 1 hour to complete. 
-
-```go
-queue := &Queue{
-	Name: "TEST",
-	MaxRunTime: 60*time.Minute,
-	MaxTries: 100,
-	MaxConcurrent: 100,
-}
-
-client, _ := NewClient(NatsContext("WQ"), WorkQueue(queue))
-
-payload := map[string]string{"hello": "world"}
-task, _ := NewTask("example", payload, TaskDeadline(time.Now().Add(time.Hour)))
-_ = client.EnqueueTask(ctx, "TEST", task)
-```
-
-One or many job processors can be started to consume the work in the Queues:
-
-```go
-queue := &Queue{
-	Name: "TEST",
-	MaxRunTime: 60*time.Minute,
-	MaxTries: 100,
-	MaxConcurrent: 100,
-}
-
-client, _ := NewClient(NatsContext("WQ"), WorkQueue(queue))
-
-router := NewTaskRouter()
-router.HandleFunc("example", func(ctx context.Context, t *Task) (interface{}, error) {
-	log.Printf("Processing task %s", t.ID)
-	
-	return "done", nil
-})
-
-client.Run(ctx, router)
-```
-
-Here we create a handler for `example` type tasks that just always finish it. Tasks can come from any of the defined
-queues, one queue can hold many types of task.
-
-Tasks can be loaded via the client:
-
-```go
-client, _ := NewClient(NatsContext("WQ"))
-task, _ := client.LoadTaskByID("24ErgVol4ZjpoQ8FAima9R2jEHB")
-```
-
-A completed task will look like this:
-
-```json
-{
-  "id": "24ErgVol4ZjpoQ8FAima9R2jEHB",
-  "type": "example",
-  "queue": "TEST",
-  "payload": "eyJoZWxsbyI6IndvcmxkIn0=",
-  "result": {
-    "payload": "done",
-    "completed": "2022-01-26T14:46:09.427182Z"
-  },
-  "state": "complete",
-  "created": "2022-01-26T14:46:09.232015Z",
-  "tried": "2022-01-26T14:46:09.427182Z",
-  "tries": 1
-}
-```
+* Task DLQ for failed or expired task definitions, with various retention policies
+* Middleware support for task handlers like http muxes
+* Real time lifecycle events
