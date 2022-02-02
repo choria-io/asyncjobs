@@ -41,6 +41,7 @@ var (
 	ErrTerminateTask = fmt.Errorf("terminate task")
 )
 
+// Storage implements the backend access
 type Storage interface {
 	SaveTaskState(ctx context.Context, task *Task) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
@@ -139,6 +140,7 @@ func (c *Client) EnqueueTask(ctx context.Context, task *Task) error {
 	return c.opts.queue.enqueueTask(ctx, task)
 }
 
+// StorageAdmin access admin features of the storage backend
 func (c *Client) StorageAdmin() StorageAdmin {
 	return c.storage
 }
@@ -165,6 +167,7 @@ func nowPointer() *time.Time {
 func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 	t.State = TaskStateActive
 	t.LastTriedAt = nowPointer()
+	t.LastErr = ""
 
 	return c.storage.SaveTaskState(ctx, t)
 }
@@ -172,6 +175,8 @@ func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{}) error {
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateCompleted
+	t.LastErr = ""
+
 	t.Result = &TaskResult{
 		Payload:     payload,
 		CompletedAt: time.Now().UTC(),
