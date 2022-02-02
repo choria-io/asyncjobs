@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/choria-io/asyncjobs"
 	"github.com/dustin/go-humanize"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -22,12 +23,26 @@ type queueCommand struct {
 	maxTries      int
 	maxTime       time.Duration
 	maxConcurrent int
+	memory        bool
+	replicas      int
+	discardOld    bool
 }
 
 func configureQueueCommand(app *kingpin.Application) {
 	c := &queueCommand{}
 
 	queues := app.Command("queues", "Manage Work Queues").Alias("q").Alias("queue")
+
+	add := queues.Command("new", "Creates a new Queue").Alias("add").Alias("n").Alias("a").Action(c.addAction)
+	add.Arg("queue", "Queue to Configure").Required().StringVar(&c.name)
+	add.Flag("age", "Sets the maximum age for entries to keep, 0s for unlimited").Default("0s").DurationVar(&c.maxAge)
+	add.Flag("entries", "Sets the maximum amount of entries to keep, 0 for unlimited").Default("0").IntVar(&c.maxEntries)
+	add.Flag("tries", "Maximum delivery attempts to allow per message, -1 for unlimited").Default(fmt.Sprintf("%d", asyncjobs.DefaultMaxTries)).IntVar(&c.maxTries)
+	add.Flag("run-time", "Maximum run-time to allow per task").Default(asyncjobs.DefaultJobRunTime.String()).DurationVar(&c.maxTime)
+	add.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default(fmt.Sprintf("%d", asyncjobs.DefaultQueueMaxConcurrent)).IntVar(&c.maxConcurrent)
+	add.Flag("memory", "Store the Queue in memory").BoolVar(&c.memory)
+	add.Flag("replicas", "Number of storage replicas to configure").Default("1").IntVar(&c.replicas)
+	add.Flag("discard-old", "When full, discard old entries").BoolVar(&c.discardOld)
 
 	queues.Command("list", "List Queues").Alias("ls").Action(c.lsAction)
 
@@ -49,6 +64,42 @@ func configureQueueCommand(app *kingpin.Application) {
 	cfg.Flag("tries", "Maximum delivery attempts to allow per message, -1 for unlimited").Default("-2").IntVar(&c.maxTries)
 	cfg.Flag("run-time", "Maximum run-time to allow per task").Default("-1s").DurationVar(&c.maxTime)
 	cfg.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default("-2").IntVar(&c.maxConcurrent)
+}
+
+func (c *queueCommand) addAction(_ *kingpin.ParseContext) error {
+	err := prepare()
+	if err != nil {
+		return err
+	}
+
+	_, err = admin.QueueInfo(c.name)
+	if err == nil {
+		return fmt.Errorf("queue %s already exist", c.name)
+	}
+
+	queue := &asyncjobs.Queue{
+		Name:          c.name,
+		MaxAge:        c.maxAge,
+		MaxEntries:    c.maxEntries,
+		DiscardOld:    c.discardOld,
+		MaxTries:      c.maxTries,
+		MaxRunTime:    c.maxTime,
+		MaxConcurrent: c.maxConcurrent,
+	}
+
+	err = admin.PrepareQueue(queue, c.replicas, c.memory)
+	if err != nil {
+		return err
+	}
+
+	nfo, err := admin.QueueInfo(c.name)
+	if err != nil {
+		return err
+	}
+
+	showQueue(nfo)
+
+	return nil
 }
 
 func (c *queueCommand) configureAction(_ *kingpin.ParseContext) error {
