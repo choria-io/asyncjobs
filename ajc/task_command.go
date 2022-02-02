@@ -29,6 +29,8 @@ type taskCommand struct {
 	concurrency int
 	command     string
 	promPort    int
+	memory      bool
+	replicas    int
 
 	limit int
 	json  bool
@@ -60,6 +62,11 @@ func configureTaskCommand(app *kingpin.Application) {
 	purge := tasks.Command("purge", "Purge all entries from the Tasks store").Action(c.purgeAction)
 	purge.Flag("force", "Force purge without prompting").Short('f').BoolVar(&c.force)
 
+	init := tasks.Command("initialize", "Initialize the Task storage").Action(c.initAction)
+	init.Flag("memory", "Use memory as a storage backend").BoolVar(&c.memory)
+	init.Flag("retention", "Sets how long Tasks are kept in the Task Store").DurationVar(&c.retention)
+	init.Flag("replicas", "How many replicas to keep in a JetStream cluster").Default("1").IntVar(&c.replicas)
+
 	config := tasks.Command("configure", "Configures the Task storage").Alias("config").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
 
@@ -71,6 +78,27 @@ func configureTaskCommand(app *kingpin.Application) {
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
 	process.Arg("command", "The command to invoke for each Task").Required().Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
+}
+
+func (c *taskCommand) initAction(_ *kingpin.ParseContext) error {
+	err := prepare(asyncjobs.NoStorageInit())
+	if err != nil {
+		return err
+	}
+
+	err = admin.PrepareTasks(c.memory, c.replicas, c.retention)
+	if err != nil {
+		return err
+	}
+
+	nfo, err := admin.TasksInfo()
+	if err != nil {
+		return err
+	}
+
+	showTasks(nfo)
+
+	return nil
 }
 
 func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {

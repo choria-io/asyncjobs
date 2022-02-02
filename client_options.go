@@ -22,11 +22,20 @@ type ClientOpts struct {
 	memoryStore   bool
 	statsPort     int
 	logger        Logger
+	skipPrepare   bool
 	nc            *nats.Conn
 }
 
 // ClientOpt configures the client
 type ClientOpt func(opts *ClientOpts) error
+
+// NoStorageInit skips setting up any queues or task stores when creating a client
+func NoStorageInit() ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.skipPrepare = true
+		return nil
+	}
+}
 
 // CustomLogger sets a custom logger to use for all logging
 func CustomLogger(log Logger) ClientOpt {

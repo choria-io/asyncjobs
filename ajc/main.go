@@ -5,9 +5,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/choria-io/asyncjobs"
+	"github.com/nats-io/jsm.go/natscontext"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -21,20 +24,43 @@ var (
 	log    *logrus.Entry
 	client *asyncjobs.Client
 	admin  asyncjobs.StorageAdmin
-	caj    *kingpin.Application
+	ajc    *kingpin.Application
 )
 
 func main() {
-	caj = kingpin.New("ajc", "Choria Asynchronous Jobs")
-	caj.Version(version)
-	caj.Author("R.I.Pienaar <rip@devco.net>")
+	ajc = kingpin.New("ajc", "Choria Asynchronous Jobs")
+	ajc.Version(version)
+	ajc.Author("R.I.Pienaar <rip@devco.net>")
+	ajc.UsageWriter(os.Stdout)
+	ajc.UsageTemplate(kingpin.CompactUsageTemplate)
+	ajc.HelpFlag.Short('h')
 
-	caj.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)
-	caj.Flag("debug", "Enable debug level logging").Envar("AJC_DEBUG").BoolVar(&debug)
+	ajc.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)
+	ajc.Flag("debug", "Enable debug level logging").Envar("AJC_DEBUG").BoolVar(&debug)
 
-	configureInfoCommand(caj)
-	configureTaskCommand(caj)
-	configureQueueCommand(caj)
+	configureInfoCommand(ajc)
+	configureTaskCommand(ajc)
+	configureQueueCommand(ajc)
 
-	kingpin.MustParse(caj.Parse(os.Args[1:]))
+	_, err := ajc.Parse(os.Args[1:])
+	if err != nil {
+		switch {
+		case strings.Contains(err.Error(), "expected command but"):
+			ajc.Usage(nil)
+
+		case strings.Contains(err.Error(), "unknown context"):
+			fmt.Fprintf(os.Stderr, "ajc: no NATS context %q found, create one using 'nats context'\n", nctx)
+
+			known := natscontext.KnownContexts()
+			if len(known) > 0 {
+				fmt.Fprintln(os.Stderr)
+				fmt.Fprintf(os.Stderr, "Known contexts: %s\n", strings.Join(known, "\n                "))
+			}
+
+		default:
+			fmt.Fprintf(os.Stderr, "ajc runtime error: %v\n", err)
+		}
+
+		os.Exit(1)
+	}
 }
