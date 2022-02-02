@@ -101,14 +101,16 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 		c.log.Debugf("Creating %s queue with no user defined queues set", c.opts.queue.Name)
 	}
 
-	err = c.setupStreams()
-	if err != nil {
-		return nil, err
-	}
+	if !copts.skipPrepare {
+		err = c.setupStreams()
+		if err != nil {
+			return nil, err
+		}
 
-	err = c.setupQueues()
-	if err != nil {
-		return nil, err
+		err = c.setupQueues()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c, nil

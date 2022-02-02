@@ -17,6 +17,8 @@ This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asyn
 
  * [Status](#status)
  * [Features](#features)
+ * [Wiki](https://github.com/choria-io/asyncjobs/wiki)
+ * [Community](https://github.com/choria-io/asyncjobs/discussions)
  * Examples
    * [Golang](https://github.com/choria-io/asyncjobs/wiki/Introductory-Golang-Walkthrough)
    * [CLI](https://github.com/choria-io/asyncjobs/wiki/Introductory-CLI-Walkthrough)
@@ -44,8 +46,10 @@ JetStream enables, so there might be some churn in the feature set here.
 * Task deduplication
 * Deadline per task - after this time the task will not be processed
 * Max tries per task, capped to the queue tries
-* Task state tracked during it's lifetime
+* Task state tracked during througout it's lifecycle
 * [K-Sortable](https://github.com/segmentio/ksuid) Task GUIDs
+
+See [Task Lifecycle](https://github.com/choria-io/asyncjobs/wiki/Task-Lifecycle) for full background and details
 
 ### Queues
 
