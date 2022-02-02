@@ -132,6 +132,22 @@ func WorkQueue(queue *Queue) ClientOpt {
 	}
 }
 
+// BindWorkQueue binds the client to a work queue that should already exist
+func BindWorkQueue(queue string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		if queue == "" {
+			return fmt.Errorf("a queue name is required")
+		}
+		if opts.queue != nil {
+			return fmt.Errorf("a queue has already been defined")
+		}
+
+		opts.queue = &Queue{Name: queue, NoCreate: true}
+
+		return nil
+	}
+}
+
 // TaskRetention is the time tasks will be kept with.
 //
 // Used only when initially creating the underlying streams.

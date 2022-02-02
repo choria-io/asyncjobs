@@ -339,7 +339,7 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 }
 
 func (c *taskCommand) addAction(_ *kingpin.ParseContext) error {
-	err := prepare()
+	err := prepare(asyncjobs.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}

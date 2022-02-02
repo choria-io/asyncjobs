@@ -17,7 +17,9 @@ This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asyn
 
  * [Status](#status)
  * [Features](#features)
- * [Examples](https://github.com/choria-io/asyncjobs/wiki/Introductory-Golang-Walkthrough)
+ * Examples
+   * [Golang](https://github.com/choria-io/asyncjobs/wiki/Introductory-Golang-Walkthrough)
+   * [CLI](https://github.com/choria-io/asyncjobs/wiki/Introductory-CLI-Walkthrough)
  
  [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
  [![Go Report Card](https://goreportcard.com/badge/github.com/choria-io/asyncjobs)](https://goreportcard.com/report/github.com/choria-io/asyncjobs) 

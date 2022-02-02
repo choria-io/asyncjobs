@@ -40,6 +40,12 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 	conn := []nats.Option{
 		nats.MaxReconnects(10),
 		nats.Name("Choria Asynchronous Jobs CLI version " + version),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			log.Printf("Reconnected to NATS server %s", nc.ConnectedUrl())
+		}),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			log.Printf("Disconnected from server: %v", err)
+		}),
 		nats.ErrorHandler(func(nc *nats.Conn, _ *nats.Subscription, err error) {
 			url := nc.ConnectedUrl()
 			if url == "" {
@@ -51,7 +57,8 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 	}
 
 	opts := []asyncjobs.ClientOpt{
-		asyncjobs.CustomLogger(log), asyncjobs.NatsContext(nctx, conn...),
+		asyncjobs.CustomLogger(log),
+		asyncjobs.NatsContext(nctx, conn...),
 	}
 	opts = append(opts, copts...)
 
