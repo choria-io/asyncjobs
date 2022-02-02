@@ -317,16 +317,20 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	fmt.Printf("Task %s created at %s\n\n", task.ID, task.CreatedAt.Format(timeFormat))
 	fmt.Printf("              Payload: %s\n", humanize.IBytes(uint64(len(task.Payload))))
 	fmt.Printf("               Status: %s\n", task.State)
+	if task.Result != nil {
+		fmt.Printf("            Completed: %s (%s)\n", task.Result.CompletedAt.Format(timeFormat), humanizeDuration(task.Result.CompletedAt.Sub(task.CreatedAt)))
+	} else {
+		if task.LastTriedAt != nil {
+			fmt.Printf("       Last Processed: %s\n", task.LastTriedAt.Format(timeFormat))
+		}
+		if task.LastErr != "" {
+			fmt.Printf("           Last Error: %s\n", task.LastErr)
+		}
+	}
 	if task.Queue != "" {
 		fmt.Printf("                Queue: %s\n", task.Queue)
 	}
 	fmt.Printf("                Tries: %d\n", task.Tries)
-	if task.LastTriedAt != nil {
-		fmt.Printf("       Last Processed: %s\n", task.LastTriedAt.Format(timeFormat))
-	}
-	if task.LastErr != "" {
-		fmt.Printf("           Last Error: %s\n", task.LastErr)
-	}
 	if task.Deadline != nil {
 		fmt.Printf("  Scheduling Deadline: %s\n", task.Deadline.Format(timeFormat))
 	}
