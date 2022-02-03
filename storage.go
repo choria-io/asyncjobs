@@ -128,20 +128,58 @@ func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error 
 
 }
 
+func (s *jetStreamStorage) RetryTaskByID(ctx context.Context, queue *Queue, id string) error {
+	task, err := s.LoadTaskByID(id)
+	if err != nil {
+		return err
+	}
+
+	q, ok := s.qStreams[queue.Name]
+	if !ok {
+		return fmt.Errorf("unknown queue %s", queue.Name)
+	}
+
+	msg, err := q.ReadLastMessageForSubject(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name, task.ID))
+	if err == nil {
+		s.log.Debugf("Deleting Work Queue item %d from %s", msg.Sequence, msg.Subject)
+		err = q.DeleteMessage(msg.Sequence)
+		if err != nil {
+			s.log.Warnf("Could not remove work queue item for Task %s from Queue %s", task.ID, queue.Name)
+		}
+	}
+
+	task.State = TaskStateRetry
+	task.Result = nil
+
+	return s.EnqueueTask(ctx, queue, task)
+}
+
 func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *Task) error {
+	if task.State != TaskStateNew && task.State != TaskStateRetry {
+		return fmt.Errorf("cannot enqueue a task in state %q", task.State)
+	}
+
 	ji, err := newProcessItem(TaskItem, task.ID)
 	if err != nil {
 		return err
 	}
 
+	task.Queue = queue.Name
 	err = s.SaveTaskState(ctx, task)
 	if err != nil {
 		return err
 	}
 
-	msg := nats.NewMsg(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name, task.Type))
-	msg.Header.Add(api.JSMsgId, task.ID) // dedupe on the queue, though should not be needed
+	msg := nats.NewMsg(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name, task.ID))
 	msg.Data = ji
+
+	// if someone is retrying a task we should allow that without dupe checking since they
+	// would have removed the work queue item already
+	if task.State != TaskStateRetry {
+		msg.Header.Add(api.JSMsgId, task.ID) // dedupe on the queue, though should not be needed
+	}
+
+	s.log.Debugf("Enqueueing task into queue %s via %s", task.Queue, msg.Subject)
 	ret, err := s.nc.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
@@ -152,7 +190,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 		return err
 	}
 
-	_, err = jsm.ParsePubAck(ret)
+	ack, err := jsm.ParsePubAck(ret)
 	if err != nil {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
@@ -160,6 +198,14 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 			return err
 		}
 		return err
+	}
+	if ack.Duplicate {
+		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
+		task.State = TaskStateQueueError
+		if err := s.SaveTaskState(ctx, task); err != nil {
+			return err
+		}
+		return fmt.Errorf("duplicate work queue item")
 	}
 
 	enqueueCounter.WithLabelValues(queue.Name).Inc()
