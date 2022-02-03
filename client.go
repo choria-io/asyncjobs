@@ -45,13 +45,14 @@ var (
 type Storage interface {
 	SaveTaskState(ctx context.Context, task *Task) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
+	RetryTaskByID(ctx context.Context, queue *Queue, id string) error
+	LoadTaskByID(id string) (*Task, error)
 	AckItem(ctx context.Context, item *ProcessItem) error
 	NakItem(ctx context.Context, item *ProcessItem) error
 	TerminateItem(ctx context.Context, item *ProcessItem) error
 	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)
 	PrepareQueue(q *Queue, replicas int, memory bool) error
 	PrepareTasks(memory bool, replicas int, retention time.Duration) error
-	LoadTaskByID(id string) (*Task, error)
 }
 
 // StorageAdmin is helpers to support the CLI mainly, this leaks a bunch of details about JetStream
@@ -135,6 +136,11 @@ func (c *Client) Run(ctx context.Context, router *Mux) error {
 // LoadTaskByID loads a task from the backend using its ID
 func (c *Client) LoadTaskByID(id string) (*Task, error) {
 	return c.storage.LoadTaskByID(id)
+}
+
+// RetryTaskByID will retry a task, first removing an entry from the Work Queue if already there
+func (c *Client) RetryTaskByID(ctx context.Context, id string) error {
+	return c.opts.queue.retryTaskByID(ctx, id)
 }
 
 // EnqueueTask adds a task to the named queue which must already exist

@@ -47,6 +47,10 @@ type QueueInfo struct {
 	Consumer *api.ConsumerInfo `json:"consumer_info"`
 }
 
+func (q *Queue) retryTaskByID(ctx context.Context, id string) error {
+	return q.storage.RetryTaskByID(ctx, q, id)
+}
+
 func (q *Queue) enqueueTask(ctx context.Context, task *Task) error {
 	task.Queue = q.Name
 	return q.storage.EnqueueTask(ctx, q, task)

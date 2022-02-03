@@ -177,6 +177,8 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 				continue
 			}
 
+			p.log.Debugf("Received an Item with ID %s", item.JobID)
+
 			err = p.processMessage(ctx, item)
 			if err != nil {
 				p.log.Warnf("Processing job %s failed: %v", item.JobID, err)

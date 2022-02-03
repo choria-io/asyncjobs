@@ -48,6 +48,10 @@ func configureTaskCommand(app *kingpin.Application) {
 	add.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
 	add.Flag("deadline", "A duration to determine when the latest time that a task handler will be called").DurationVar(&c.deadline)
 
+	retry := tasks.Command("retry", "Retries delivery of a task currently in the Task Store").Action(c.retryAction)
+	retry.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
+	retry.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
+
 	view := tasks.Command("view", "Views the status of a Task").Alias("show").Alias("v").Action(c.viewAction)
 	view.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
 	view.Flag("json", "Show JSON data").Short('j').BoolVar(&c.json)
@@ -78,6 +82,20 @@ func configureTaskCommand(app *kingpin.Application) {
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
 	process.Arg("command", "The command to invoke for each Task").Required().Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
+}
+
+func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
+	err := prepare(asyncjobs.BindWorkQueue(c.queue))
+	if err != nil {
+		return err
+	}
+
+	err = client.RetryTaskByID(context.Background(), c.id)
+	if err != nil {
+		return err
+	}
+
+	return c.viewAction(nil)
 }
 
 func (c *taskCommand) initAction(_ *kingpin.ParseContext) error {

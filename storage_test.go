@@ -546,6 +546,70 @@ var _ = Describe("Storage", func() {
 		})
 	})
 
+	Describe("RetryTaskByID", func() {
+		It("Should handle missing tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				q := testQueue()
+
+				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.RetryTaskByID(context.Background(), q, "123")).To(Equal(ErrTaskNotFound))
+			})
+		})
+
+		It("Should handle unknown queues", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				q := testQueue()
+				Expect(storage.PrepareQueue(q, 1, true)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storage.EnqueueTask(context.Background(), q, task)).ToNot(HaveOccurred())
+
+				delete(storage.qStreams, q.Name)
+				Expect(storage.RetryTaskByID(context.Background(), q, task.ID)).To(MatchError("unknown queue ginkgo"))
+			})
+		})
+
+		It("Should remove the task from the queue and enqueue with retry state", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				q := testQueue()
+				Expect(storage.PrepareQueue(q, 1, true)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storage.EnqueueTask(context.Background(), q, task)).ToNot(HaveOccurred())
+
+				nfo, err := storage.qStreams[q.Name].State()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nfo.Msgs).To(Equal(uint64(1)))
+				Expect(nfo.FirstSeq).To(Equal(uint64(1)))
+
+				Expect(storage.RetryTaskByID(context.Background(), q, task.ID)).ToNot(HaveOccurred())
+
+				nfo, err = storage.qStreams[q.Name].State()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nfo.Msgs).To(Equal(uint64(1)))
+				Expect(nfo.FirstSeq).To(Equal(uint64(2)))
+
+				task, err = storage.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(task.State).To(Equal(TaskStateRetry))
+			})
+		})
+	})
+
 	Describe("EnqueueTask", func() {
 		It("Save the task and handle save errors", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
@@ -587,6 +651,31 @@ var _ = Describe("Storage", func() {
 				header, err := decodeHeadersMsg(msg.Header)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(header.Get(api.JSMsgId)).To(Equal(task.ID))
+			})
+		})
+
+		It("Should not set dupe headers for retries", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareTasks(true, 1, time.Hour)
+				Expect(err).ToNot(HaveOccurred())
+
+				q := testQueue()
+				err = storage.PrepareQueue(q, 1, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", nil)
+				Expect(err).ToNot(HaveOccurred())
+				task.State = TaskStateRetry
+
+				err = storage.EnqueueTask(ctx, q, task)
+				Expect(err).ToNot(HaveOccurred())
+
+				msg, err := storage.qStreams[q.Name].ReadMessage(1)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(msg.Header).To(HaveLen(0))
 			})
 		})
 

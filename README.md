@@ -42,11 +42,12 @@ JetStream enables, so there might be some churn in the feature set here.
 
 ### Tasks
 
-* Task definitions stored post-processing, with various retention policies
+* Task definitions stored post-processing, with various retention and discard policies
+* Ability to retry a Task that has already been completed or failed
 * Task deduplication
 * Deadline per task - after this time the task will not be processed
 * Max tries per task, capped to the queue tries
-* Task state tracked during througout it's lifecycle
+* Task state tracked throughout it's lifecycle
 * [K-Sortable](https://github.com/segmentio/ksuid) Task GUIDs
 
 See [Task Lifecycle](https://github.com/choria-io/asyncjobs/wiki/Task-Lifecycle) for full background and details
