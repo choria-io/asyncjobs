@@ -23,11 +23,28 @@ type ClientOpts struct {
 	statsPort     int
 	logger        Logger
 	skipPrepare   bool
-	nc            *nats.Conn
+	discard       []TaskState
+
+	nc *nats.Conn
 }
 
 // ClientOpt configures the client
 type ClientOpt func(opts *ClientOpts) error
+
+// DiscardTaskStates configures the client to discard Tasks that reach a final state in the list of supplied TaskState
+func DiscardTaskStates(states ...TaskState) ClientOpt {
+	return func(opts *ClientOpts) error {
+		for _, s := range states {
+			if s != TaskStateCompleted && s != TaskStateExpired && s != TaskStateTerminated {
+				return fmt.Errorf("only states completed, expired or terminated can be discarded")
+			}
+		}
+
+		opts.discard = append(opts.discard, states...)
+
+		return nil
+	}
+}
 
 // NoStorageInit skips setting up any queues or task stores when creating a client
 func NoStorageInit() ClientOpt {

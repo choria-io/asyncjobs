@@ -71,10 +71,47 @@ var _ = Describe("Client", func() {
 		log.SetOutput(GinkgoWriter)
 	})
 
+	Describe("shouldDiscardTask", func() {
+		It("Should correctly detect task states", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				_, err := NewClient(NatsConn(nc), DiscardTaskStates(TaskStateExpired, TaskStateActive))
+				Expect(err).To(MatchError("only states completed, expired or terminated can be discarded"))
+
+				client, err := NewClient(NatsConn(nc), DiscardTaskStates(TaskStateExpired, TaskStateCompleted))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.shouldDiscardTask(&Task{State: TaskStateActive})).To(BeFalse())
+				Expect(client.shouldDiscardTask(&Task{State: TaskStateExpired})).To(BeTrue())
+				Expect(client.shouldDiscardTask(&Task{State: TaskStateCompleted})).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("discardTaskIfDesired", func() {
+		It("Should delete the correct tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc), DiscardTaskStates(TaskStateExpired, TaskStateCompleted))
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("x", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
+
+				Expect(client.discardTaskIfDesired(task)).ToNot(HaveOccurred())
+				_, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				task.State = TaskStateExpired
+				Expect(client.discardTaskIfDesired(task)).ToNot(HaveOccurred())
+				_, err = client.LoadTaskByID(task.ID)
+				Expect(err).To(MatchError("task not found"))
+			})
+		})
+	})
+
 	It("Should function", func() {
 		Skip("For interactive testing and debugging")
 		withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
-			fmt.Printf("URL: %v\n", nc.ConnectedUrl())
 			client, err := NewClient(NatsConn(nc), RetryBackoffPolicy(RetryLinearOneMinute))
 			Expect(err).ToNot(HaveOccurred())
 

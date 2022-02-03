@@ -174,6 +174,25 @@ func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 	return c.storage.SaveTaskState(ctx, t)
 }
 
+func (c *Client) shouldDiscardTask(t *Task) bool {
+	for _, state := range c.opts.discard {
+		if t.State == state {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *Client) discardTaskIfDesired(t *Task) error {
+	if !c.shouldDiscardTask(t) {
+		return nil
+	}
+
+	c.log.Debugf("Discarding task with state %s based on desired discards %q", t.State, c.opts.discard)
+	return c.storage.DeleteTaskByID(t.ID)
+}
+
 func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{}) error {
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateCompleted
@@ -184,19 +203,29 @@ func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{
 		CompletedAt: time.Now().UTC(),
 	}
 
-	return c.storage.SaveTaskState(ctx, t)
+	err := c.storage.SaveTaskState(ctx, t)
+	if err != nil {
+		return err
+	}
+
+	return c.discardTaskIfDesired(t)
 }
 
-func (c *Client) handleTaskTerminated(ctx context.Context, t *Task, err error) error {
-	t.LastErr = err.Error()
+func (c *Client) handleTaskTerminated(ctx context.Context, t *Task, terr error) error {
+	t.LastErr = terr.Error()
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateTerminated
 
-	return c.storage.SaveTaskState(ctx, t)
+	err := c.storage.SaveTaskState(ctx, t)
+	if err != nil {
+		return err
+	}
+
+	return c.discardTaskIfDesired(t)
 }
 
-func (c *Client) handleTaskError(ctx context.Context, t *Task, err error) error {
-	t.LastErr = err.Error()
+func (c *Client) handleTaskError(ctx context.Context, t *Task, terr error) error {
+	t.LastErr = terr.Error()
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateRetry
 
@@ -207,7 +236,12 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, err error) error 
 		}
 	}
 
-	return c.storage.SaveTaskState(ctx, t)
+	err := c.storage.SaveTaskState(ctx, t)
+	if err != nil {
+		return err
+	}
+
+	return c.discardTaskIfDesired(t)
 }
 
 func (c *Client) setupQueues() error {
