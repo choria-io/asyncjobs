@@ -201,6 +201,34 @@ var _ = Describe("Processor", func() {
 			})
 		})
 
+		It("Should detect stale active tasks", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				q := newDefaultQueue()
+				q.MaxRunTime = 100 * time.Millisecond
+
+				client, err := NewClient(NatsConn(nc), WorkQueue(q))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+				Expect(client.setTaskActive(ctx, task)).ToNot(HaveOccurred())
+
+				proc, err := newProcessor(client)
+				Expect(err).ToNot(HaveOccurred())
+
+				// sleep till past queue max age
+				time.Sleep(200 * time.Millisecond)
+
+				<-proc.limiter
+
+				Expect(proc.processMessage(ctx, &ProcessItem{JobID: task.ID})).ToNot(HaveOccurred())
+			})
+		})
+
 		It("Should not process completed or expired tasks", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 				client, err := NewClient(NatsConn(nc))

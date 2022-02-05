@@ -21,7 +21,7 @@ type processor struct {
 	c           *Client
 	concurrency int
 	limiter     chan struct{}
-	retryPolicy RetryPolicy
+	retryPolicy RetryPolicyProvider
 	log         Logger
 	mu          *sync.Mutex
 }
@@ -79,8 +79,9 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 
 	switch task.State {
 	case TaskStateActive:
-		// TODO: detect stale state
-		return fmt.Errorf("already active")
+		if task.LastTriedAt == nil || time.Since(*task.LastTriedAt) < p.queue.MaxRunTime {
+			return fmt.Errorf("already active")
+		}
 
 	case TaskStateCompleted, TaskStateExpired:
 		p.c.storage.AckItem(ctx, item)
@@ -132,7 +133,7 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 		case err != nil:
 			p.log.Debugf("Unexpected polling error: %v", err)
 			workQueuePollErrorCounter.WithLabelValues(p.queue.Name).Inc()
-			if retryLinearTenSeconds.Sleep(ctx, ctr) == context.Canceled {
+			if RetrySleep(ctx, retryLinearTenSeconds, ctr) == context.Canceled {
 				return nil, ctx.Err()
 			}
 			ctr++

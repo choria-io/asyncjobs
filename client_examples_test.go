@@ -21,45 +21,6 @@ func panicIfErr(err error) {
 	}
 }
 
-func ExampleClient_LoadTaskByID() {
-	client, err := NewClient(NatsContext("WQ"))
-	panicIfErr(err)
-
-	task, err := client.LoadTaskByID("24ErgVol4ZjpoQ8FAima9R2jEHB")
-	panicIfErr(err)
-
-	fmt.Printf("Loaded task %s in state %s", task.ID, task.State)
-}
-
-func ExampleClient_consumer() {
-	queue := &Queue{
-		Name:          "P100",
-		MaxRunTime:    60 * time.Minute,
-		MaxConcurrent: 20,
-		MaxTries:      100,
-	}
-
-	// Uses the NATS CLI context WQ for connection details, will create the queue if
-	// it does not already exist
-	client, err := NewClient(NatsContext("WQ"), WorkQueue(queue))
-	panicIfErr(err)
-
-	router := NewTaskRouter()
-	err = router.HandleFunc("email:send", func(_ context.Context, t *Task) (interface{}, error) {
-		log.Printf("Processing task: %s", t.ID)
-
-		// handle task.Payload which is a JSON encoded email
-
-		// task record will be updated with this payload result
-		return "success", nil
-	})
-	panicIfErr(err)
-
-	// Starts handling registered tasks, blocks until canceled
-	err = client.Run(context.Background(), router)
-	panicIfErr(err)
-}
-
 func ExampleClient_producer() {
 	queue := &Queue{
 		Name:          "P100",
@@ -94,4 +55,43 @@ func ExampleNewTask_with_deadline() {
 	}
 
 	fmt.Printf("Task ID: %s\n", task.ID)
+}
+
+func ExampleClient_consumer() {
+	queue := &Queue{
+		Name:          "P100",
+		MaxRunTime:    60 * time.Minute,
+		MaxConcurrent: 20,
+		MaxTries:      100,
+	}
+
+	// Uses the NATS CLI context WQ for connection details, will create the queue if
+	// it does not already exist
+	client, err := NewClient(NatsContext("WQ"), WorkQueue(queue), RetryBackoffPolicy(RetryLinearOneHour))
+	panicIfErr(err)
+
+	router := NewTaskRouter()
+	err = router.HandleFunc("email:send", func(_ context.Context, t *Task) (interface{}, error) {
+		log.Printf("Processing task: %s", t.ID)
+
+		// handle task.Payload which is a JSON encoded email
+
+		// task record will be updated with this payload result
+		return "success", nil
+	})
+	panicIfErr(err)
+
+	// Starts handling registered tasks, blocks until canceled
+	err = client.Run(context.Background(), router)
+	panicIfErr(err)
+}
+
+func ExampleClient_LoadTaskByID() {
+	client, err := NewClient(NatsContext("WQ"))
+	panicIfErr(err)
+
+	task, err := client.LoadTaskByID("24ErgVol4ZjpoQ8FAima9R2jEHB")
+	panicIfErr(err)
+
+	fmt.Printf("Loaded task %s in state %s", task.ID, task.State)
 }

@@ -45,7 +45,7 @@ type jetStreamStorage struct {
 	mgr *jsm.Manager
 
 	tasks *taskStorage
-	retry RetryPolicy
+	retry RetryPolicyProvider
 
 	qStreams   map[string]*jsm.Stream
 	qConsumers map[string]*jsm.Consumer
@@ -64,7 +64,7 @@ type taskMeta struct {
 	seq uint64
 }
 
-func newJetStreamStorage(nc *nats.Conn, rp RetryPolicy, log Logger) (*jetStreamStorage, error) {
+func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*jetStreamStorage, error) {
 	if nc == nil {
 		return nil, fmt.Errorf("no connection supplied")
 	}
@@ -132,20 +132,6 @@ func (s *jetStreamStorage) RetryTaskByID(ctx context.Context, queue *Queue, id s
 	task, err := s.LoadTaskByID(id)
 	if err != nil {
 		return err
-	}
-
-	q, ok := s.qStreams[queue.Name]
-	if !ok {
-		return fmt.Errorf("unknown queue %s", queue.Name)
-	}
-
-	msg, err := q.ReadLastMessageForSubject(fmt.Sprintf(WorkStreamSubjectPattern, queue.Name, task.ID))
-	if err == nil {
-		s.log.Debugf("Deleting Work Queue item %d from %s", msg.Sequence, msg.Subject)
-		err = q.DeleteMessage(msg.Sequence)
-		if err != nil {
-			s.log.Warnf("Could not remove work queue item for Task %s from Queue %s", task.ID, queue.Name)
-		}
 	}
 
 	task.State = TaskStateRetry
@@ -323,6 +309,7 @@ func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) erro
 		jsm.Subjects(fmt.Sprintf(WorkStreamSubjectPattern, q.Name, ">")),
 		jsm.WorkQueueRetention(),
 		jsm.Replicas(replicas),
+		jsm.MaxMessagesPerSubject(1),
 		jsm.StreamDescription("Choria Async Jobs Work Queue"),
 	}
 
