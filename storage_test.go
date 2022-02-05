@@ -559,24 +559,6 @@ var _ = Describe("Storage", func() {
 			})
 		})
 
-		It("Should handle unknown queues", func() {
-			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
-				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
-				Expect(err).ToNot(HaveOccurred())
-
-				q := testQueue()
-				Expect(storage.PrepareQueue(q, 1, true)).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
-
-				task, err := NewTask("ginkgo", nil)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(storage.EnqueueTask(context.Background(), q, task)).ToNot(HaveOccurred())
-
-				delete(storage.qStreams, q.Name)
-				Expect(storage.RetryTaskByID(context.Background(), q, task.ID)).To(MatchError("unknown queue ginkgo"))
-			})
-		})
-
 		It("Should remove the task from the queue and enqueue with retry state", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})

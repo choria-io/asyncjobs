@@ -18,6 +18,13 @@ type RetryPolicy struct {
 	Jitter float64
 }
 
+// RetryPolicyProvider is the interface that the ReplyPolicy implements,
+// use this to implement your own exponential backoff system or similar for
+// task retries.
+type RetryPolicyProvider interface {
+	Duration(n int) time.Duration
+}
+
 var (
 	// RetryLinearTenMinutes is a 20-step policy between 1 and 10 minutes
 	RetryLinearTenMinutes = linearPolicy(20, 0.90, time.Minute, 10*time.Minute)
@@ -36,22 +43,22 @@ var (
 )
 
 // Duration is the period to sleep for try n, it includes a jitter
-func (b RetryPolicy) Duration(n int) time.Duration {
-	if n >= len(b.Intervals) {
-		n = len(b.Intervals) - 1
+func (p RetryPolicy) Duration(n int) time.Duration {
+	if n >= len(p.Intervals) {
+		n = len(p.Intervals) - 1
 	}
 
-	delay := b.jitter(b.Intervals[n])
+	delay := p.jitter(p.Intervals[n])
 	if delay == 0 {
-		delay = b.Intervals[0]
+		delay = p.Intervals[0]
 	}
 
 	return delay
 }
 
-// Sleep attempts to sleep for the relevant duration for n, interruptable by ctx
-func (b RetryPolicy) Sleep(ctx context.Context, n int) error {
-	timer := time.NewTimer(b.Duration(n))
+// RetrySleep sleeps for the duration for try n or until interrupted by ctx
+func RetrySleep(ctx context.Context, p RetryPolicyProvider, n int) error {
+	timer := time.NewTimer(p.Duration(n))
 
 	select {
 	case <-timer.C:
@@ -80,12 +87,12 @@ func linearPolicy(steps uint64, jitter float64, min time.Duration, max time.Dura
 	return p
 }
 
-func (b RetryPolicy) jitter(d time.Duration) time.Duration {
+func (p RetryPolicy) jitter(d time.Duration) time.Duration {
 	if d == 0 {
 		return 0
 	}
 
-	jf := (float64(d) * b.Jitter) + float64(rand.Int63n(int64(d)))
+	jf := (float64(d) * p.Jitter) + float64(rand.Int63n(int64(d)))
 
 	return time.Duration(jf).Round(time.Millisecond)
 }

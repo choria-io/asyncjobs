@@ -18,7 +18,7 @@ type ClientOpts struct {
 	replicas      int
 	queue         *Queue
 	taskRetention time.Duration
-	retryPolicy   RetryPolicy
+	retryPolicy   RetryPolicyProvider
 	memoryStore   bool
 	statsPort     int
 	logger        Logger
@@ -110,7 +110,7 @@ func MemoryStorage() ClientOpt {
 }
 
 // RetryBackoffPolicy uses p to schedule job retries, defaults to a linear curve backoff with jitter between 1 and 10 minutes
-func RetryBackoffPolicy(p RetryPolicy) ClientOpt {
+func RetryBackoffPolicy(p RetryPolicyProvider) ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.retryPolicy = p
 		return nil
