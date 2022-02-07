@@ -246,13 +246,13 @@ var _ = Describe("Processor", func() {
 
 				<-proc.limiter
 				task.State = TaskStateCompleted
-				Expect(client.storage.SaveTaskState(ctx, task)).ToNot(HaveOccurred())
+				Expect(client.storage.SaveTaskState(ctx, task, false)).ToNot(HaveOccurred())
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("already in state \"complete\""))
 
 				<-proc.limiter
 				task.State = TaskStateExpired
-				Expect(client.storage.SaveTaskState(ctx, task)).ToNot(HaveOccurred())
+				Expect(client.storage.SaveTaskState(ctx, task, false)).ToNot(HaveOccurred())
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
 				Expect(err).To(MatchError("already in state \"expired\""))
 

@@ -23,7 +23,8 @@ type processor struct {
 	limiter     chan struct{}
 	retryPolicy RetryPolicyProvider
 	log         Logger
-	mu          *sync.Mutex
+
+	mu *sync.Mutex
 }
 
 // ItemKind indicates the kind of job a work queue entry represents
@@ -88,15 +89,13 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		return fmt.Errorf("already in state %q", task.State)
 	}
 
-	if task.Deadline != nil && time.Since(*task.Deadline) > 0 {
+	if task.IsPastDeadline() {
 		workQueueEntryPastDeadlineCounter.WithLabelValues(p.queue.Name).Inc()
-		task.State = TaskStateExpired
-		err = p.c.storage.SaveTaskState(ctx, task)
+		err = p.c.handleTaskExpired(ctx, task)
 		if err != nil {
-			p.log.Errorf("Could not set task %s to expired state: %v", task.ID, err)
+			p.log.Warnf("Could not expire task %s: %v", task.ID, err)
 		}
 		return fmt.Errorf("past deadline")
-
 	}
 
 	err = p.c.setTaskActive(ctx, task)

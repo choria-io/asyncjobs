@@ -30,6 +30,13 @@ const (
 	// TasksStreamSubjectPattern is the printf pattern that can be used to find an individual task by its task ID
 	TasksStreamSubjectPattern = "CHORIA_AJ.T.%s"
 
+	// EventsSubjectWildcard is the NATS wildcard for receiving all events
+	EventsSubjectWildcard = "CHORIA_AJ.E.>"
+	// TaskStateChangeEventSubjectPattern is a printf pattern for determining the event publish subject
+	TaskStateChangeEventSubjectPattern = "CHORIA_AJ.E.task_state.%s"
+	// TaskStateChangeEventSubjectWildcard is a NATS wildcard for receiving all TaskStateChangeEvent messages
+	TaskStateChangeEventSubjectWildcard = "CHORIA_AJ.E.task_state.*"
+
 	// WorkStreamNamePattern is the printf pattern for determining JetStream Stream names per queue
 	WorkStreamNamePattern = "CHORIA_AJ_Q_%s"
 	// WorkStreamSubjectPattern is the printf pattern individual items are placed in, placeholders for JobID and JobType
@@ -87,7 +94,23 @@ func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*je
 	return s, nil
 }
 
-func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error {
+func (s *jetStreamStorage) PublishTaskStateChangeEvent(ctx context.Context, task *Task) error {
+	e, err := NewTaskStateChangeEvent(task)
+	if err != nil {
+		return err
+	}
+
+	ej, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+
+	target := fmt.Sprintf(TaskStateChangeEventSubjectPattern, task.ID)
+	s.log.Debugf("Publishing lifecycle event %s for task %s to %s", e.TaskType, task.ID, target)
+	return s.nc.Publish(target, ej)
+}
+
+func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task, notify bool) error {
 	jt, err := json.Marshal(task)
 	if err != nil {
 		return err
@@ -124,6 +147,10 @@ func (s *jetStreamStorage) SaveTaskState(ctx context.Context, task *Task) error 
 
 	taskUpdateCounter.WithLabelValues(string(task.State)).Inc()
 
+	if notify {
+		return s.PublishTaskStateChangeEvent(ctx, task)
+	}
+
 	return nil
 
 }
@@ -151,7 +178,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 	}
 
 	task.Queue = queue.Name
-	err = s.SaveTaskState(ctx, task)
+	err = s.SaveTaskState(ctx, task, true)
 	if err != nil {
 		return err
 	}
@@ -170,7 +197,8 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 	if err != nil {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
-		if err := s.SaveTaskState(ctx, task); err != nil {
+		task.LastErr = err.Error()
+		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
 		}
 		return err
@@ -180,7 +208,8 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 	if err != nil {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
-		if err := s.SaveTaskState(ctx, task); err != nil {
+		task.LastErr = err.Error()
+		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
 		}
 		return err
@@ -188,7 +217,8 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 	if ack.Duplicate {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
-		if err := s.SaveTaskState(ctx, task); err != nil {
+		task.LastErr = err.Error()
+		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
 		}
 		return fmt.Errorf("duplicate work queue item")

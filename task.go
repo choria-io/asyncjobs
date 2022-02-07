@@ -110,6 +110,11 @@ func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, erro
 	return t, nil
 }
 
+// IsPastDeadline determines if the task is past it's deadline
+func (t *Task) IsPastDeadline() bool {
+	return t.Deadline != nil && time.Since(*t.Deadline) > 0
+}
+
 // TaskOpt configures Tasks made using NewTask()
 type TaskOpt func(*Task) error
 
