@@ -74,7 +74,8 @@ func configureTaskCommand(app *kingpin.Application) {
 	config := tasks.Command("configure", "Configures the Task storage").Alias("config").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
 
-	tasks.Command("watch", "Watch job updates in real time").Action(c.watchAction)
+	watch := tasks.Command("watch", "Watch job updates in real time").Action(c.watchAction)
+	watch.Flag("task", "Watch for updates related to a specific task ID").StringVar(&c.id)
 
 	process := tasks.Command("process", "Process Tasks from a given queue").Action(c.processAction)
 	process.Arg("type", "Types of Tasks to process").Required().Envar("AJC_TYPE").StringVar(&c.ttype)
@@ -125,18 +126,17 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	mgr, stream, err := admin.TasksStore()
+	mgr, _, err := admin.TasksStore()
 	if err != nil {
 		return err
 	}
 
-	nc := mgr.NatsConn()
-	sub, err := mgr.NatsConn().SubscribeSync(nc.NewRespInbox())
-	if err != nil {
-		return err
+	target := asyncjobs.EventsSubjectWildcard
+	if c.id != "" {
+		target = fmt.Sprintf(asyncjobs.TaskStateChangeEventSubjectPattern, c.id)
 	}
 
-	_, err = stream.NewConsumer(jsm.StartWithLastReceived(), jsm.DeliverySubject(sub.Subject), jsm.AcknowledgeNone(), jsm.PushFlowControl(), jsm.IdleHeartbeat(time.Minute))
+	sub, err := mgr.NatsConn().SubscribeSync(target)
 	if err != nil {
 		return err
 	}
@@ -147,32 +147,23 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 			return err
 		}
 
-		if len(msg.Data) == 0 {
-			if msg.Reply != "" {
-				msg.Respond(nil)
+		event, kind, err := asyncjobs.ParseEventJSON(msg.Data)
+		if err != nil {
+			fmt.Printf("Could not parse event: %v\n", err)
+		}
+
+		switch e := event.(type) {
+		case asyncjobs.TaskStateChangeEvent:
+			ts := time.Unix(0, e.TimeStamp)
+			if e.LastErr == "" {
+				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", ts.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State)
+			} else {
+				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", ts.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State, e.LastErr)
 			}
 
-			continue
+		default:
+			fmt.Printf("[%s] Unknown event type %s\n", time.Now().UTC().Format("15:04:05"), kind)
 		}
-
-		task := &asyncjobs.Task{}
-		err = json.Unmarshal(msg.Data, task)
-		if err != nil {
-			fmt.Printf("Invalid task update received: %v: %q\n", err, msg.Data)
-			continue
-		}
-
-		ts := time.Now()
-		if task.LastTriedAt != nil && !task.LastTriedAt.IsZero() {
-			ts = *task.LastTriedAt
-		}
-
-		if task.LastErr == "" {
-			fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", ts.Format("15:04:05"), task.ID, task.Queue, task.Type, task.Tries, task.State)
-		} else {
-			fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", ts.Format("15:04:05"), task.ID, task.Queue, task.Type, task.Tries, task.State, task.LastErr)
-		}
-
 	}
 }
 

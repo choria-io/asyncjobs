@@ -43,10 +43,11 @@ var (
 
 // Storage implements the backend access
 type Storage interface {
-	SaveTaskState(ctx context.Context, task *Task) error
+	SaveTaskState(ctx context.Context, task *Task, notify bool) error
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
 	RetryTaskByID(ctx context.Context, queue *Queue, id string) error
 	LoadTaskByID(id string) (*Task, error)
+	PublishTaskStateChangeEvent(ctx context.Context, task *Task) error
 	AckItem(ctx context.Context, item *ProcessItem) error
 	NakItem(ctx context.Context, item *ProcessItem) error
 	TerminateItem(ctx context.Context, item *ProcessItem) error
@@ -177,7 +178,7 @@ func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 	t.LastTriedAt = nowPointer()
 	t.LastErr = ""
 
-	return c.storage.SaveTaskState(ctx, t)
+	return c.storage.SaveTaskState(ctx, t, true)
 }
 
 func (c *Client) shouldDiscardTask(t *Task) bool {
@@ -190,9 +191,9 @@ func (c *Client) shouldDiscardTask(t *Task) bool {
 	return false
 }
 
-func (c *Client) discardTaskIfDesired(t *Task) error {
+func (c *Client) saveOrDiscardTaskIfDesired(ctx context.Context, t *Task) error {
 	if !c.shouldDiscardTask(t) {
-		return nil
+		return c.storage.SaveTaskState(ctx, t, true)
 	}
 
 	c.log.Debugf("Discarding task with state %s based on desired discards %q", t.State, c.opts.discard)
@@ -209,12 +210,7 @@ func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{
 		CompletedAt: time.Now().UTC(),
 	}
 
-	err := c.storage.SaveTaskState(ctx, t)
-	if err != nil {
-		return err
-	}
-
-	return c.discardTaskIfDesired(t)
+	return c.saveOrDiscardTaskIfDesired(ctx, t)
 }
 
 func (c *Client) handleTaskTerminated(ctx context.Context, t *Task, terr error) error {
@@ -222,12 +218,13 @@ func (c *Client) handleTaskTerminated(ctx context.Context, t *Task, terr error) 
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateTerminated
 
-	err := c.storage.SaveTaskState(ctx, t)
-	if err != nil {
-		return err
-	}
+	return c.saveOrDiscardTaskIfDesired(ctx, t)
+}
 
-	return c.discardTaskIfDesired(t)
+func (c *Client) handleTaskExpired(ctx context.Context, t *Task) error {
+	t.State = TaskStateExpired
+
+	return c.saveOrDiscardTaskIfDesired(ctx, t)
 }
 
 func (c *Client) handleTaskError(ctx context.Context, t *Task, terr error) error {
@@ -242,12 +239,7 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, terr error) error
 		}
 	}
 
-	err := c.storage.SaveTaskState(ctx, t)
-	if err != nil {
-		return err
-	}
-
-	return c.discardTaskIfDesired(t)
+	return c.saveOrDiscardTaskIfDesired(ctx, t)
 }
 
 func (c *Client) setupQueues() error {

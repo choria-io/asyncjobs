@@ -87,7 +87,7 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("discardTaskIfDesired", func() {
+	Describe("saveOrDiscardTaskIfDesired", func() {
 		It("Should delete the correct tasks", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
 				client, err := NewClient(NatsConn(nc), DiscardTaskStates(TaskStateExpired, TaskStateCompleted))
@@ -97,12 +97,12 @@ var _ = Describe("Client", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
 
-				Expect(client.discardTaskIfDesired(task)).ToNot(HaveOccurred())
+				Expect(client.saveOrDiscardTaskIfDesired(context.Background(), task)).ToNot(HaveOccurred())
 				_, err = client.LoadTaskByID(task.ID)
 				Expect(err).ToNot(HaveOccurred())
 
 				task.State = TaskStateExpired
-				Expect(client.discardTaskIfDesired(task)).ToNot(HaveOccurred())
+				Expect(client.saveOrDiscardTaskIfDesired(context.Background(), task)).ToNot(HaveOccurred())
 				_, err = client.LoadTaskByID(task.ID)
 				Expect(err).To(MatchError("task not found"))
 			})

@@ -30,10 +30,14 @@ This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asyn
 
 ## Status
 
-This is a brand-new project, under heavy development and relies on unreleased behaviors in JetStream. Interfaces might change,
+This is a brand-new project, under heavy development. Interfaces might change,
 Structures might change, features might be removed if it's found to be a bad fit for the underlying storage.
 
 Use with care.
+
+## Requirements
+
+NATS 2.7.2 with JetStream enabled.
 
 ## Features
 

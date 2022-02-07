@@ -703,7 +703,7 @@ var _ = Describe("Storage", func() {
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				if err != nats.ErrNoResponders {
 					Fail(fmt.Sprintf("Unexpected error: %v", err))
 				}
@@ -721,7 +721,7 @@ var _ = Describe("Storage", func() {
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				tasks, err := mgr.LoadStream(TasksStreamName)
@@ -746,7 +746,7 @@ var _ = Describe("Storage", func() {
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(task.storageOptions).ToNot(BeNil())
 				so := task.storageOptions.(*taskMeta)
@@ -762,7 +762,7 @@ var _ = Describe("Storage", func() {
 				Expect(header.Get(api.JSExpectedLastSubjSeq)).To(Equal("0"))
 				Expect(msg.Sequence).To(Equal(uint64(1)))
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(task.storageOptions).ToNot(BeNil())
 				so = task.storageOptions.(*taskMeta)
@@ -787,16 +787,40 @@ var _ = Describe("Storage", func() {
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				// force the failure
 				task.storageOptions.(*taskMeta).seq = 10
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				if !jsm.IsNatsError(err, 10071) {
 					Fail(fmt.Sprintf("Unexpected error %v", err))
 				}
+			})
+		})
+
+		It("Should publish events", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				sub, err := nc.SubscribeSync(fmt.Sprintf(TaskStateChangeEventSubjectPattern, task.ID))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(storage.SaveTaskState(ctx, task, true)).ToNot(HaveOccurred())
+
+				event, err := sub.NextMsg(time.Second)
+				Expect(err).ToNot(HaveOccurred())
+
+				e, kind, err := ParseEventJSON(event.Data)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(kind).To(Equal(TaskStateChangeEventType))
+				Expect(e.(TaskStateChangeEvent).TaskID).To(Equal(task.ID))
 			})
 		})
 
@@ -811,7 +835,7 @@ var _ = Describe("Storage", func() {
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.SaveTaskState(ctx, task)
+				err = storage.SaveTaskState(ctx, task, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				lt, err := storage.LoadTaskByID(task.ID)
