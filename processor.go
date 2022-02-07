@@ -75,18 +75,18 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 			return nil
 		}
 
-		return fmt.Errorf("loading failed: %s", err)
+		return fmt.Errorf("%s: %s", ErrTaskLoadFailed, err)
 	}
 
 	switch task.State {
 	case TaskStateActive:
 		if task.LastTriedAt == nil || time.Since(*task.LastTriedAt) < p.queue.MaxRunTime {
-			return fmt.Errorf("already active")
+			return ErrTaskAlreadyActive
 		}
 
 	case TaskStateCompleted, TaskStateExpired:
 		p.c.storage.AckItem(ctx, item)
-		return fmt.Errorf("already in state %q", task.State)
+		return fmt.Errorf("%w %q", ErrTaskAlreadyInState, task.State)
 	}
 
 	if task.IsPastDeadline() {
@@ -95,12 +95,12 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		if err != nil {
 			p.log.Warnf("Could not expire task %s: %v", task.ID, err)
 		}
-		return fmt.Errorf("past deadline")
+		return ErrTaskPastDeadline
 	}
 
 	err = p.c.setTaskActive(ctx, task)
 	if err != nil {
-		return fmt.Errorf("setting active failed: %v", err)
+		return fmt.Errorf("%w %s: %v", ErrTaskUpdateFailed, task.State, err)
 	}
 
 	go p.handle(ctx, task, item, p.queue.MaxRunTime)
@@ -150,7 +150,7 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 
 func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 	if mux == nil {
-		return fmt.Errorf("mux is required")
+		return ErrNoMux
 	}
 
 	p.mux = mux

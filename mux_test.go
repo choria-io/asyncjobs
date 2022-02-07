@@ -24,7 +24,7 @@ var _ = Describe("Router", func() {
 
 			handler := router.Handler(task)
 			_, err = handler(nil, task)
-			Expect(err).To(MatchError("no handler for task type y"))
+			Expect(err).To(MatchError(ErrNoHandlerForTaskType))
 		})
 
 		It("Should find the correct handler", func() {

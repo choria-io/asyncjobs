@@ -197,7 +197,7 @@ var _ = Describe("Processor", func() {
 				<-proc.limiter
 
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
-				Expect(err).To(MatchError("already active"))
+				Expect(err).To(Equal(ErrTaskAlreadyActive))
 			})
 		})
 
@@ -248,13 +248,13 @@ var _ = Describe("Processor", func() {
 				task.State = TaskStateCompleted
 				Expect(client.storage.SaveTaskState(ctx, task, false)).ToNot(HaveOccurred())
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
-				Expect(err).To(MatchError("already in state \"complete\""))
+				Expect(err).To(MatchError(ErrTaskAlreadyInState))
 
 				<-proc.limiter
 				task.State = TaskStateExpired
 				Expect(client.storage.SaveTaskState(ctx, task, false)).ToNot(HaveOccurred())
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
-				Expect(err).To(MatchError("already in state \"expired\""))
+				Expect(err).To(MatchError(ErrTaskAlreadyInState))
 
 			})
 		})

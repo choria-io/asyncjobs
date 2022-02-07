@@ -128,7 +128,7 @@ var _ = Describe("Storage", func() {
 			prepare(func(storage *jetStreamStorage, q *Queue) {
 				q.Name = ""
 				err := storage.PrepareQueue(q, 1, true)
-				Expect(err).To(MatchError("name is required"))
+				Expect(err).To(Equal(ErrQueueNameRequired))
 			})
 		})
 
@@ -243,7 +243,7 @@ var _ = Describe("Storage", func() {
 			prepare(func(storage *jetStreamStorage, q *Queue) {
 				q.NoCreate = true
 				err := storage.PrepareQueue(q, 1, false)
-				Expect(err).To(MatchError("work queue not found"))
+				Expect(err).To(Equal(ErrQueueNotFound))
 
 				q.NoCreate = false
 				err = storage.PrepareQueue(q, 1, false)
@@ -252,7 +252,7 @@ var _ = Describe("Storage", func() {
 
 				q.NoCreate = true
 				err = storage.PrepareQueue(q, 1, false)
-				Expect(err).To(MatchError("work queue consumer not found"))
+				Expect(err).To(Equal(ErrQueueConsumerNotFound))
 			})
 		})
 	})

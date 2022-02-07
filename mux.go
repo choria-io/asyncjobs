@@ -45,7 +45,7 @@ func NewTaskRouter() *Mux {
 }
 
 func notFoundHandler(_ context.Context, t *Task) (interface{}, error) {
-	return nil, fmt.Errorf("no handler for task type %s", t.Type)
+	return nil, fmt.Errorf("%w %q", ErrNoHandlerForTaskType, t.Type)
 }
 
 // Handler looks up the handler function for a task
@@ -74,7 +74,7 @@ func (m *Mux) HandleFunc(taskType string, h HandlerFunc) error {
 
 	_, ok := m.hf[taskType]
 	if ok {
-		return fmt.Errorf("already have a handler for type %s tasks", taskType)
+		return fmt.Errorf("%w %q", ErrDuplicateHandlerForTaskType, taskType)
 	}
 
 	m.hf[taskType] = &entryHandler{hf: h, ttype: taskType}
