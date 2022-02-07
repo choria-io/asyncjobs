@@ -104,7 +104,7 @@ var _ = Describe("Client", func() {
 				task.State = TaskStateExpired
 				Expect(client.saveOrDiscardTaskIfDesired(context.Background(), task)).ToNot(HaveOccurred())
 				_, err = client.LoadTaskByID(task.ID)
-				Expect(err).To(MatchError("task not found"))
+				Expect(err).To(Equal(ErrTaskNotFound))
 			})
 		})
 	})

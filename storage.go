@@ -73,7 +73,7 @@ type taskMeta struct {
 
 func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*jetStreamStorage, error) {
 	if nc == nil {
-		return nil, fmt.Errorf("no connection supplied")
+		return nil, ErrNoNatsConn
 	}
 
 	var err error
@@ -169,7 +169,7 @@ func (s *jetStreamStorage) RetryTaskByID(ctx context.Context, queue *Queue, id s
 
 func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *Task) error {
 	if task.State != TaskStateNew && task.State != TaskStateRetry {
-		return fmt.Errorf("cannot enqueue a task in state %q", task.State)
+		return fmt.Errorf("%w %q", ErrTaskTypeCannotEnqueue, task.State)
 	}
 
 	ji, err := newProcessItem(TaskItem, task.ID)
@@ -221,7 +221,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
 		}
-		return fmt.Errorf("duplicate work queue item")
+		return ErrDuplicateItem
 	}
 
 	enqueueCounter.WithLabelValues(queue.Name).Inc()
@@ -231,7 +231,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 
 func (s *jetStreamStorage) AckItem(ctx context.Context, item *ProcessItem) error {
 	if item.storageMeta == nil {
-		return fmt.Errorf("invalid storage item")
+		return ErrInvalidStorageItem
 	}
 
 	return item.storageMeta.(*nats.Msg).Ack(nats.Context(ctx))
@@ -239,7 +239,7 @@ func (s *jetStreamStorage) AckItem(ctx context.Context, item *ProcessItem) error
 
 func (s *jetStreamStorage) TerminateItem(ctx context.Context, item *ProcessItem) error {
 	if item.storageMeta == nil {
-		return fmt.Errorf("invalid storage item")
+		return ErrInvalidStorageItem
 	}
 
 	return item.storageMeta.(*nats.Msg).Term(nats.Context(ctx))
@@ -247,7 +247,7 @@ func (s *jetStreamStorage) TerminateItem(ctx context.Context, item *ProcessItem)
 
 func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error {
 	if item.storageMeta == nil {
-		return fmt.Errorf("invalid storage item")
+		return ErrInvalidStorageItem
 	}
 
 	msg := item.storageMeta.(*nats.Msg)
@@ -277,12 +277,12 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 	qc, ok := s.qConsumers[q.Name]
 	s.mu.Unlock()
 	if !ok {
-		return nil, fmt.Errorf("invalid queue storage state")
+		return nil, ErrInvalidQueueState
 	}
 
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return nil, fmt.Errorf("non deadline context given")
+		return nil, ErrContextWithoutDeadline
 	}
 
 	rj, err := json.Marshal(&api.JSApiConsumerGetNextRequest{Batch: 1, Expires: time.Until(deadline)})
@@ -308,7 +308,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 		s.log.Debugf("0 byte payload with headers %#v", msg.Header)
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
 		msg.Term() // data is corrupt so we terminate it, no associated job to update
-		return nil, fmt.Errorf("invalid queue item received")
+		return nil, ErrQueueItemInvalid
 	}
 
 	item := &ProcessItem{storageMeta: msg}
@@ -316,7 +316,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 	if err != nil || item.JobID == "" {
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
 		msg.Term() // data is corrupt so we terminate it, no associated job to update
-		return nil, fmt.Errorf("corrupt queue item received")
+		return nil, ErrQueueItemCorrupt
 	}
 
 	return item, nil
@@ -388,7 +388,7 @@ func (s *jetStreamStorage) updateQueueSettings(q *Queue) error {
 	ss, sok := s.qStreams[q.Name]
 	sc, cok := s.qConsumers[q.Name]
 	if !sok || !cok {
-		return fmt.Errorf("unknown queue %s", q.Name)
+		return ErrQueueNotFound
 	}
 
 	q.mu.Lock()
@@ -410,7 +410,7 @@ func (s *jetStreamStorage) joinQueue(q *Queue) error {
 	s.qStreams[q.Name], err = s.mgr.LoadStream(fmt.Sprintf(WorkStreamNamePattern, q.Name))
 	if err != nil {
 		if jsm.IsNatsError(err, 10059) {
-			return fmt.Errorf("work queue not found")
+			return ErrQueueNotFound
 		}
 		return err
 	}
@@ -418,7 +418,7 @@ func (s *jetStreamStorage) joinQueue(q *Queue) error {
 	s.qConsumers[q.Name], err = s.qStreams[q.Name].LoadConsumer("WORKERS")
 	if err != nil {
 		if jsm.IsNatsError(err, 10014) {
-			return fmt.Errorf("work queue consumer not found")
+			return ErrQueueConsumerNotFound
 		}
 		return err
 	}
@@ -428,7 +428,7 @@ func (s *jetStreamStorage) joinQueue(q *Queue) error {
 
 func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) error {
 	if q.Name == "" {
-		return fmt.Errorf("name is required")
+		return ErrQueueNameRequired
 	}
 
 	s.mu.Lock()
@@ -624,7 +624,7 @@ func (s *jetStreamStorage) Tasks(ctx context.Context, limit int32) (chan *Task, 
 		return nil, err
 	}
 	if nfo.Msgs == 0 {
-		return nil, fmt.Errorf("no tasks found")
+		return nil, ErrNoTasks
 	}
 
 	out := make(chan *Task, limit)
@@ -682,14 +682,18 @@ const (
 )
 
 func decodeHeadersMsg(data []byte) (http.Header, error) {
+	if len(data) == 0 {
+		return map[string][]string{}, nil
+	}
+
 	tp := textproto.NewReader(bufio.NewReader(bytes.NewReader(data)))
 	if l, err := tp.ReadLine(); err != nil || l != hdrLine[:hdrPreEnd] {
-		return nil, fmt.Errorf("could not decode headers")
+		return nil, ErrInvalidHeaders
 	}
 
 	mh, err := tp.ReadMIMEHeader()
 	if err != nil {
-		return nil, fmt.Errorf("could not decode headers")
+		return nil, ErrInvalidHeaders
 	}
 
 	return http.Header(mh), nil

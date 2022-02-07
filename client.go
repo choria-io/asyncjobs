@@ -6,7 +6,6 @@ package asyncjobs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -31,15 +30,6 @@ type Client struct {
 
 	log Logger
 }
-
-var (
-	// ErrTaskNotFound is the error indicating a task does not exist rather than a failure to load
-	ErrTaskNotFound = errors.New("task not found")
-	// ErrQueueNotFound is the error indicating a queue does not exist rather than a failure to load
-	ErrQueueNotFound = errors.New("queue not found")
-	// ErrTerminateTask indicates that a task failed, and no further processing attempts should be made
-	ErrTerminateTask = fmt.Errorf("terminate task")
-)
 
 // Storage implements the backend access
 type Storage interface {

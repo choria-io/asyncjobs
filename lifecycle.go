@@ -62,7 +62,7 @@ func ParseEventJSON(event []byte) (interface{}, string, error) {
 
 		return e, base.EventType, nil
 	default:
-		return nil, base.EventType, fmt.Errorf("unknown event type %s", base.EventType)
+		return nil, base.EventType, fmt.Errorf("%w: %s", ErrUnknownEventType, base.EventType)
 	}
 }
 
