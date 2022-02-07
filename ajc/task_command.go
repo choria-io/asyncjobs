@@ -154,11 +154,10 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 
 		switch e := event.(type) {
 		case asyncjobs.TaskStateChangeEvent:
-			ts := time.Unix(0, e.TimeStamp)
 			if e.LastErr == "" {
-				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", ts.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State)
+				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", e.TimeStamp.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State)
 			} else {
-				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", ts.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State, e.LastErr)
+				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", e.TimeStamp.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State, e.LastErr)
 			}
 
 		default:
