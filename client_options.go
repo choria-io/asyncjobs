@@ -89,6 +89,27 @@ func NatsContext(c string, opts ...nats.Option) ClientOpt {
 			nats.MaxReconnects(-1),
 			nats.CustomReconnectDelay(RetryLinearOneMinute.Duration),
 			nats.UseOldRequestStyle(),
+			nats.Name("Choria Asynchronous Jobs Client"),
+			nats.ReconnectHandler(func(nc *nats.Conn) {
+				copts.logger.Infof("Reconnected to NATS server %s", nc.ConnectedUrl())
+			}),
+			nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+				copts.logger.Errorf("Disconnected from server: %v", err)
+			}),
+			nats.ErrorHandler(func(nc *nats.Conn, _ *nats.Subscription, err error) {
+				url := nc.ConnectedUrl()
+				if url == "" {
+					copts.logger.Errorf("Unexpected NATS error: %s", err)
+				} else {
+					copts.logger.Errorf("Unexpected NATS error from server %s: %s", url, err)
+				}
+			}),
+			nats.CustomReconnectDelay(func(n int) time.Duration {
+				d := RetryLinearOneMinute.Duration(n)
+				copts.logger.Warnf("Sleeping %v till the next reconnection attempt after %d attempts", d, n)
+
+				return d
+			}),
 		}
 
 		nc, err := natscontext.Connect(c, append(nopts, opts...)...)

@@ -40,10 +40,7 @@ Use with care.
 Tasks are published to Work Queues:
 
 ```go
-// connect to NATS
-nc,  := nats.Connect("localhost:4222")
-
-// establish a connection to the EMAIL work queue
+// establish a connection to the EMAIL work queue using a NATS context
 client, _ := asyncjobs.NewClient(asyncjobs.NatsConn(nc), asyncjobs.BindWorkQueue("EMAIL"))
 
 // create a task with the type 'email:new' and body from newEmail()
@@ -57,7 +54,8 @@ Tasks are processes by horizontally and vertically scalable. Typically, a Handle
 integration, concurrency and backoffs configured.
 
 ```go
-// establish a connection to the EMAIL work queue using a NATS context, with concurrency, prometheus stats and backoff
+// establish a connection to the EMAIL work queue using a 
+// NATS context, with concurrency, prometheus stats and backoff
 client, _ := asyncjobs.NewClient(
 	asyncjobs.NatsContext("EMAIL"), 
 	asyncjobs.BindWorkQueue("EMAIL"),

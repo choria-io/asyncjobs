@@ -31,6 +31,7 @@ type taskCommand struct {
 	promPort    int
 	memory      bool
 	replicas    int
+	retry       string
 
 	limit int
 	json  bool
@@ -83,6 +84,7 @@ func configureTaskCommand(app *kingpin.Application) {
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
 	process.Arg("command", "The command to invoke for each Task").Required().Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
+	process.Flag("backoff", "Selects a backoff policy to apply (1m, 10m, 1h)").EnumVar(&c.retry, "1m", "10m", "1h")
 }
 
 func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
@@ -167,8 +169,20 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 }
 
 func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
-	queue := asyncjobs.Queue{Name: c.queue, NoCreate: true}
-	err := prepare(asyncjobs.WorkQueue(&queue), asyncjobs.PrometheusListenPort(c.promPort))
+	retryPolicy := asyncjobs.RetryDefault
+	switch c.retry {
+	case "1m":
+		retryPolicy = asyncjobs.RetryLinearOneMinute
+	case "10m":
+		retryPolicy = asyncjobs.RetryLinearTenMinutes
+	case "1h":
+		retryPolicy = asyncjobs.RetryLinearOneHour
+	}
+
+	err := prepare(
+		asyncjobs.BindWorkQueue(c.queue),
+		asyncjobs.PrometheusListenPort(c.promPort),
+		asyncjobs.RetryBackoffPolicy(retryPolicy))
 	if err != nil {
 		return err
 	}
