@@ -188,7 +188,7 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 	}
 
 	router := asyncjobs.NewTaskRouter()
-	err = router.HandleFunc(c.ttype, func(ctx context.Context, task *asyncjobs.Task) (interface{}, error) {
+	err = router.HandleFunc(c.ttype, func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
 		tj, err := json.Marshal(task)
 		if err != nil {
 			return nil, err

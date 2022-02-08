@@ -50,7 +50,7 @@ task, _ := asyncjobs.NewTask("email:new", newEmail())
 client.EnqueueTask(ctx, task)
 ```
 
-Tasks are processes by horizontally and vertically scalable. Typically, a Handler handles one type of Task. We have Prometheus
+Tasks are processes by horizontally and vertically scalable processes. Typically, a Handler handles one type of Task. We have Prometheus
 integration, concurrency and backoffs configured.
 
 ```go
@@ -64,7 +64,7 @@ client, _ := asyncjobs.NewClient(
 	asyncjobs.RetryBackoffPolicy(asyncjobs.RetryLinearTenMinutes))
 
 router := asyncjobs.NewTaskRouter()
-router.Handler("email:new", func(ctx context.Context, task *asyncjobs.Task) (interface{}, error) {
+router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
 	log.Printf("Processing task %s", task.ID)
 
 	// do work here using task.Payload

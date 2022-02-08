@@ -15,7 +15,7 @@ var _ = Describe("Router", func() {
 	Describe("Handler", func() {
 		It("Should support default handler", func() {
 			router := NewTaskRouter()
-			router.HandleFunc("x", func(_ context.Context, _ *Task) (interface{}, error) {
+			router.HandleFunc("x", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
 				return "x", nil
 			})
 
@@ -23,28 +23,28 @@ var _ = Describe("Router", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			handler := router.Handler(task)
-			_, err = handler(nil, task)
+			_, err = handler(nil, &defaultLogger{}, task)
 			Expect(err).To(MatchError(ErrNoHandlerForTaskType))
 		})
 
 		It("Should find the correct handler", func() {
 			router := NewTaskRouter()
-			router.HandleFunc("", func(_ context.Context, _ *Task) (interface{}, error) {
+			router.HandleFunc("", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
 				return "custom default", nil
 			})
-			router.HandleFunc("things:", func(_ context.Context, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
 				return "things:", nil
 			})
-			router.HandleFunc("things:very:specific", func(_ context.Context, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:very:specific", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
 				return "things:very:specific", nil
 			})
-			router.HandleFunc("things:specific", func(_ context.Context, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:specific", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
 				return "things:specific", nil
 			})
 
 			check := func(ttype string, expected string) {
 				task := &Task{Type: ttype}
-				res, err := router.Handler(task)(context.Background(), task)
+				res, err := router.Handler(task)(context.Background(), &defaultLogger{}, task)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).To(Equal(expected))
 			}

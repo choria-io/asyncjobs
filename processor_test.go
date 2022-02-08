@@ -43,7 +43,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
 					wg.Done()
 					return nil, fmt.Errorf("simulated failure: %w", ErrTerminateTask)
 				})
@@ -88,7 +88,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
 					wg.Done()
 					return nil, fmt.Errorf("simulated failure")
 				})
@@ -129,7 +129,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
 					wg.Done()
 					return "done", nil
 				})
@@ -320,10 +320,11 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, task *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (interface{}, error) {
 					t, err := client.LoadTaskByID(task.ID)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(t.State).To(Equal(TaskStateActive))
+					Expect(log).ToNot(BeNil())
 
 					wg.Done()
 					return "done", nil
