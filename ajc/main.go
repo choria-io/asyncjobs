@@ -41,6 +41,7 @@ func main() {
 	configureInfoCommand(ajc)
 	configureTaskCommand(ajc)
 	configureQueueCommand(ajc)
+	configurePackagesCommand(ajc)
 
 	_, err := ajc.Parse(os.Args[1:])
 	if err != nil {

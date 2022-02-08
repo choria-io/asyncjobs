@@ -50,7 +50,7 @@ task, _ := asyncjobs.NewTask("email:new", newEmail())
 client.EnqueueTask(ctx, task)
 ```
 
-Tasks are processes by horizontally and vertically scalable. Typically, a Handler handles one type of Task. We have Prometheus
+Tasks are processes by horizontally and vertically scalable processes. Typically, a Handler handles one type of Task. We have Prometheus
 integration, concurrency and backoffs configured.
 
 ```go
