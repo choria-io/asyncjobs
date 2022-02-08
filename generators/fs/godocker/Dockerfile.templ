@@ -5,15 +5,18 @@ WORKDIR /usr/src/app
 COPY main.go /usr/src/app/main.go
 
 RUN go mod init "{{ .Package.Name }}" && \
-    go mod tidy -compat=1.17 && \
     go get github.com/choria-io/asyncjobs@{{ .Package.AJVersion }} && \
+{{- range $handler := .Package.TaskHandlers }}
+    go get "{{ $handler.Package }}@{{ $handler.Version }}" && \
+{{- end }}
+    go mod tidy -compat=1.17 && \
     go mod download
 
 RUN go build -v -o /app -ldflags="-s -w"
 
 FROM alpine:latest
 
-RUN adduser -g "Choria Async Jobs" choria && \
+RUN adduser -DHg "Choria Async Jobs" choria && \
     mkdir /lib64 && \
     ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2 && \
     apk --no-cache add ca-certificates && \
