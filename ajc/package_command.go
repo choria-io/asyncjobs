@@ -47,7 +47,7 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	}
 
 	if h.AJVersion == "" {
-		h.AJVersion = version
+		h.AJVersion = fmt.Sprintf("v%s", version)
 	}
 	if h.Name == "" {
 		h.Name = "choria.io/asyncjobs/handlers"
