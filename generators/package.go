@@ -30,4 +30,6 @@ type TaskHandler struct {
 	TaskType string `yaml:"type"`
 	// Package is a golang package name that has a AsyncJobHandler() implementing HandlerFunc
 	Package string `yaml:"package"`
+	// Version is the version to fetch of this package
+	Version string `yaml:"version"`
 }

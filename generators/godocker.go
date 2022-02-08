@@ -7,6 +7,7 @@ package generators
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,15 @@ func (g *GoContainer) RenderToDirectory(target string) error {
 	files, err := godockerFS.ReadDir("fs/godocker")
 	if err != nil {
 		return err
+	}
+
+	for _, p := range g.Package.TaskHandlers {
+		if p.Package == "" {
+			return fmt.Errorf("task handlers require a package")
+		}
+		if p.Version == "" {
+			return fmt.Errorf("task handlers require a version")
+		}
 	}
 
 	funcs := map[string]interface{}{
