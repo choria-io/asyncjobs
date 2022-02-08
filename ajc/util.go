@@ -29,6 +29,10 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 	} else {
 		logger.SetLevel(logrus.InfoLevel)
 	}
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:   true,
+		TimestampFormat: "15:04:05",
+	})
 	log = logrus.NewEntry(logger)
 
 	if nctx == "" {
@@ -38,22 +42,8 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 	var err error
 
 	conn := []nats.Option{
-		nats.MaxReconnects(10),
 		nats.Name("Choria Asynchronous Jobs CLI version " + version),
-		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Printf("Reconnected to NATS server %s", nc.ConnectedUrl())
-		}),
-		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Printf("Disconnected from server: %v", err)
-		}),
-		nats.ErrorHandler(func(nc *nats.Conn, _ *nats.Subscription, err error) {
-			url := nc.ConnectedUrl()
-			if url == "" {
-				log.Printf("Unexpected NATS error: %s", err)
-			} else {
-				log.Printf("Unexpected NATS error from server %s: %s", url, err)
-			}
-		}),
+		nats.PingInterval(30 * time.Second),
 	}
 
 	opts := []asyncjobs.ClientOpt{
