@@ -211,7 +211,7 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 
 	t.Tries++
 
-	payload, err := p.mux.Handler(t)(timeout, t)
+	payload, err := p.mux.Handler(t)(timeout, p.log, t)
 	if err != nil {
 		if errors.Is(err, ErrTerminateTask) {
 			handlersErroredCounter.WithLabelValues(t.Queue, t.Type).Inc()

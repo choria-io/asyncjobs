@@ -1,0 +1,115 @@
+// Copyright (c) 2022, R.I. Pienaar and the Project contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"runtime"
+	"strconv"
+
+	"github.com/sirupsen/logrus"
+	aj "github.com/choria-io/asyncjobs"
+
+{{ range $handler := .Package.TaskHandlers }}
+	{{ $handler.TaskType | TypeToPackageName }} "{{ $handler.Package }}"
+{{- end }}
+)
+
+var usage = `
+Choria Async Jobs Handler Failed: %v
+
+This is a generated Handler for the Choria Async Jobs Project.
+
+It hosts the following handlers:
+{{ range $handler := .Package.TaskHandlers }}
+ - {{ $handler.TaskType }}: {{ $handler.Package }}.AsyncJobHandler
+{{- end }}
+
+To run this you need to prepare a NATS context using the nats
+CLI and then mount it into the container on /handler/config/nats.
+
+The following Environment variables are supported:
+
+ - AJ_WORK_QUEUE: The Work Queue to consume from, defaults to DEFAULT
+ - AJ_NATS_CONTEXT: The name of a NATS Context to use for connections
+ - AJ_CONCURRENCY: The number of concurrent handlers that can be run
+
+Prometheus statistics are Exposed on port 8080 as /metrics
+
+For further information see the project wiki at:
+
+   https://github.com/choria-io/asyncjobs
+
+Build Information:
+
+ - Build Time: {{ .BuildTime }}
+ - Async Jobs Package Version: {{ .Package.AJVersion }}
+
+`
+
+func usageIfError(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf(usage, err)
+	os.Exit(1)
+}
+
+func main() {
+	wq := os.Getenv("AJ_WORK_QUEUE")
+	if wq == "" {
+		usageIfError(fmt.Errorf("AJ_WORK_QUEUE is required"))
+	}
+
+	nctx := os.Getenv("AJ_NATS_CONTEXT")
+	if nctx == "" {
+		usageIfError(fmt.Errorf("AJ_NATS_CONTEXT is required"))
+	}
+
+	var err error
+	concurrencyS := os.Getenv("AJ_CONCURRENCY")
+	concurrency := runtime.NumCPU()
+	if concurrencyS != "" {
+		concurrency, err = strconv.Atoi(concurrencyS)
+		if err != nil {
+			usageIfError(fmt.Errorf("AJ_CONCURRENCY must be numeric"))
+		}
+	}
+
+	logger := logrus.New()
+	if os.Getenv("AJ_DEBUG") == "1" {
+		logger.SetLevel(logrus.DebugLevel)
+	} else {
+		logger.SetLevel(logrus.InfoLevel)
+	}
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:   true,
+		TimestampFormat: "15:04:05",
+	})
+
+	log := logrus.NewEntry(logger)
+
+	log.Printf("Connecting using Context %s consuming work queue %s with concurrency %d", nctx, wq, concurrency)
+
+	client, err := aj.NewClient(
+		aj.NatsContext(nctx),
+		aj.BindWorkQueue(wq),
+		aj.ClientConcurrency(concurrency),
+		aj.CustomLogger(log),
+		aj.PrometheusListenPort(8080))
+	usageIfError(err)
+
+	router := aj.NewTaskRouter()
+{{ range $handler := .Package.TaskHandlers }}
+	err = router.HandleFunc("{{ $handler.TaskType }}", {{ $handler.TaskType | TypeToPackageName }}.AsyncJobHandler)
+	usageIfError(err)
+{{- end }}
+
+	err = client.Run(context.Background(), router)
+	usageIfError(err)
+}

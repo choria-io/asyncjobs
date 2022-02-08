@@ -138,14 +138,14 @@ var _ = Describe("Client", func() {
 			handled := int32(0)
 
 			router := NewTaskRouter()
-			router.HandleFunc("test", func(ctx context.Context, t *Task) (interface{}, error) {
+			router.HandleFunc("test", func(ctx context.Context, log Logger, t *Task) (interface{}, error) {
 				if t.Tries > 1 {
-					log.Printf("Try %d for task %s", t.Tries, t.ID)
+					log.Infof("Try %d for task %s", t.Tries, t.ID)
 				}
 
 				done := atomic.AddInt32(&handled, 1)
 				if done == int32(testCount)+10 {
-					log.Printf("Processed all messages")
+					log.Infof("Processed all messages")
 					time.AfterFunc(50*time.Millisecond, func() {
 						cancel()
 					})
@@ -198,10 +198,10 @@ var _ = Describe("Client", func() {
 			var tries []time.Time
 
 			router := NewTaskRouter()
-			router.HandleFunc("ginkgo", func(ctx context.Context, t *Task) (interface{}, error) {
+			router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, t *Task) (interface{}, error) {
 				tries = append(tries, time.Now())
 
-				log.Printf("Trying task %s on try %d\n", t.ID, t.Tries)
+				log.Infof("Trying task %s on try %d\n", t.ID, t.Tries)
 
 				if t.Tries < 2 {
 					return "fail", fmt.Errorf("simulated failure")

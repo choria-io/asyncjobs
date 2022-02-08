@@ -21,7 +21,7 @@ import (
 	"golang.org/x/term"
 )
 
-func prepare(copts ...asyncjobs.ClientOpt) error {
+func createLogger() {
 	logger := logrus.New()
 	if debug {
 		logger.SetLevel(logrus.DebugLevel)
@@ -33,7 +33,11 @@ func prepare(copts ...asyncjobs.ClientOpt) error {
 		FullTimestamp:   true,
 		TimestampFormat: "15:04:05",
 	})
+
 	log = logrus.NewEntry(logger)
+}
+func prepare(copts ...asyncjobs.ClientOpt) error {
+	createLogger()
 
 	if nctx == "" {
 		return fmt.Errorf("no NATS Context specified")

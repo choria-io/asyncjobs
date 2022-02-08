@@ -71,7 +71,7 @@ func ExampleClient_consumer() {
 	panicIfErr(err)
 
 	router := NewTaskRouter()
-	err = router.HandleFunc("email:send", func(_ context.Context, t *Task) (interface{}, error) {
+	err = router.HandleFunc("email:send", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
 		log.Printf("Processing task: %s", t.ID)
 
 		// handle task.Payload which is a JSON encoded email

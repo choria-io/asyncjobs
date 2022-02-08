@@ -24,7 +24,7 @@ type entryHandler struct {
 }
 
 // HandlerFunc handles a single task, the response bytes will be stored in the original task
-type HandlerFunc func(ctx context.Context, t *Task) (interface{}, error)
+type HandlerFunc func(ctx context.Context, log Logger, t *Task) (interface{}, error)
 
 // Mux routes messages
 //
@@ -44,7 +44,7 @@ func NewTaskRouter() *Mux {
 	}
 }
 
-func notFoundHandler(_ context.Context, t *Task) (interface{}, error) {
+func notFoundHandler(_ context.Context, _ Logger, t *Task) (interface{}, error) {
 	return nil, fmt.Errorf("%w %q", ErrNoHandlerForTaskType, t.Type)
 }
 
