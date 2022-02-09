@@ -46,6 +46,12 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 		return fmt.Errorf("invalid handlers file: %v", err)
 	}
 
+	if h.ContextName == "" {
+		h.ContextName = "AJ"
+	}
+	if h.WorkQueue == "" {
+		h.WorkQueue = "DEFAULT"
+	}
 	if h.AJVersion == "" {
 		h.AJVersion = fmt.Sprintf("v%s", version)
 	}
@@ -56,6 +62,22 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	if len(h.TaskHandlers) == 0 {
 		return fmt.Errorf("no task handlers specified in %s", c.file)
 	}
+
+	table := newTableWriter("Handler Microservice Settings")
+	table.AddRow("Package Name", h.Name)
+	table.AddRow("NATS Context Name", h.ContextName)
+	table.AddRow("Work Queue", h.WorkQueue)
+	table.AddRow("Task Handlers", len(h.TaskHandlers))
+	table.AddRow("github.com/choria-io/asyncjobs", h.AJVersion)
+	fmt.Println(table.Render())
+
+	table = newTableWriter("Handler Packages")
+	table.AddHeaders("Task Type", "Package", "version")
+	for _, h := range h.TaskHandlers {
+		table.AddRow(h.TaskType, h.Package, h.Version)
+	}
+	fmt.Println(table.Render())
+	fmt.Println()
 
 	generator, err := generators.NewGoContainer(h)
 	if err != nil {
@@ -72,7 +94,7 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	log.Printf("Run docker build to build your package\n")
+	fmt.Println("Build your container using 'docker build'")
 
 	return nil
 }
