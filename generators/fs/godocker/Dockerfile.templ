@@ -2,17 +2,16 @@ FROM golang:latest AS builder
 
 WORKDIR /usr/src/app
 
-COPY main.go /usr/src/app/main.go
-
 RUN go mod init "{{ .Package.Name }}" && \
-    go get github.com/choria-io/asyncjobs@{{ .Package.AJVersion }} && \
 {{- range $handler := .Package.TaskHandlers }}
     go get "{{ $handler.Package }}@{{ $handler.Version }}" && \
 {{- end }}
-    go mod tidy -compat=1.17 && \
-    go mod download
+    go get github.com/choria-io/asyncjobs@{{ .Package.AJVersion }}
 
-RUN go build -v -o /app -ldflags="-s -w"
+COPY main.go /usr/src/app/main.go
+
+RUN go mod tidy -compat=1.17 && \
+    go build -v -o /app -ldflags="-s -w -extldflags=-static"
 
 FROM alpine:latest
 
@@ -36,4 +35,5 @@ ENV AJ_NATS_CONTEXT "{{ .Package.ContextName }}"
 ENV AJ_NATS_CONTEXT "AJ"
 {{- end }}
 
+WORKDIR "/handler"
 ENTRYPOINT ["/handler/app"]

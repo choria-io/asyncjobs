@@ -19,18 +19,12 @@ import (
 {{- end }}
 )
 
-var usage = `
-Choria Async Jobs Handler Failed: %v
-
-This is a generated Handler for the Choria Async Jobs Project.
+var usage = `This is a generated Handler service for the Choria Async Jobs Project.
 
 It hosts the following handlers:
 {{ range $handler := .Package.TaskHandlers }}
- - {{ $handler.TaskType }}: {{ $handler.Package }}.AsyncJobHandler
+ - {{ $handler.TaskType }}: {{ $handler.Package }}@{{ $handler.Version }}
 {{- end }}
-
-To run this you need to prepare a NATS context using the nats
-CLI and then mount it into the container on /handler/config/nats.
 
 The following Environment variables are supported:
 
@@ -38,16 +32,14 @@ The following Environment variables are supported:
  - AJ_NATS_CONTEXT: The name of a NATS Context to use for connections
  - AJ_CONCURRENCY: The number of concurrent handlers that can be run
 
-Prometheus statistics are Exposed on port 8080 as /metrics
+Prometheus statistics are Exposed on port http://0.0.0.0:8080/metrics
 
-For further information see the project wiki at:
-
-   https://github.com/choria-io/asyncjobs
+For detailed instructions see: https://choria.io/asyncjobs-docker
 
 Build Information:
 
- - Build Time: {{ .BuildTime }}
- - Async Jobs Package Version: {{ .Package.AJVersion }}
+ Async Jobs Package Version: {{ .Package.AJVersion }}
+                 Build Time: {{ .BuildTime }}
 
 `
 
@@ -56,11 +48,16 @@ func usageIfError(err error) {
 		return
 	}
 
-	fmt.Printf(usage, err)
+	fmt.Printf("Choria Async Jobs Handler Failed: %v\n\n", err)
+	fmt.Printf(usage)
 	os.Exit(1)
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		usageIfError(fmt.Errorf("no command line arguments accepted"))
+	}
+
 	wq := os.Getenv("AJ_WORK_QUEUE")
 	if wq == "" {
 		usageIfError(fmt.Errorf("AJ_WORK_QUEUE is required"))
