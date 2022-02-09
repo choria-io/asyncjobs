@@ -62,4 +62,11 @@ var (
 
 	// ErrUnknownEventType indicates that while parsing an event an unknown type of event was encountered
 	ErrUnknownEventType = fmt.Errorf("unknown event type")
+
+	// ErrRequestReplyFailed indicates a callout to a remote handler failed due to a timeout, lack of listerners or network error
+	ErrRequestReplyFailed = fmt.Errorf("request-reply callout failed")
+	// ErrRequestReplyNoDeadline indicates a request-reply handler was called without a deadline
+	ErrRequestReplyNoDeadline = fmt.Errorf("request-reply requires deadline context")
+	// ErrRequestReplyShortDeadline indicates a deadline context has a too short timeout
+	ErrRequestReplyShortDeadline = fmt.Errorf("request-reply deadline too short")
 )

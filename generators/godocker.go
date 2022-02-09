@@ -44,12 +44,18 @@ func (g *GoContainer) RenderToDirectory(target string) error {
 	}
 
 	for _, p := range g.Package.TaskHandlers {
+		if p.RequestReply {
+			continue
+		}
+
 		if p.Package == "" {
 			return fmt.Errorf("task handlers require a package")
 		}
+
 		if p.Version == "" {
 			return fmt.Errorf("task handlers require a version")
 		}
+
 	}
 
 	funcs := map[string]interface{}{

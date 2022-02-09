@@ -32,4 +32,6 @@ type TaskHandler struct {
 	Package string `yaml:"package"`
 	// Version is the version to fetch of this package
 	Version string `yaml:"version"`
+	// RequestReply indicates the handler is a callout to a remote service
+	RequestReply bool `yaml:"remote"`
 }

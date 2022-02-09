@@ -32,6 +32,7 @@ type taskCommand struct {
 	memory      bool
 	replicas    int
 	retry       string
+	remote      bool
 
 	limit int
 	json  bool
@@ -82,7 +83,8 @@ func configureTaskCommand(app *kingpin.Application) {
 	process.Arg("type", "Types of Tasks to process").Required().Envar("AJC_TYPE").StringVar(&c.ttype)
 	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("AJC_QUEUE").StringVar(&c.queue)
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
-	process.Arg("command", "The command to invoke for each Task").Required().Envar("AJC_COMMAND").ExistingFileVar(&c.command)
+	process.Arg("command", "The command to invoke for each Task").Envar("AJC_COMMAND").ExistingFileVar(&c.command)
+	process.Flag("remote", "Process tasks using a remote request-reply callout").BoolVar(&c.remote)
 	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
 	process.Flag("backoff", "Selects a backoff policy to apply (1m, 10m, 1h)").EnumVar(&c.retry, "1m", "10m", "1h")
 }
@@ -168,7 +170,46 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 	}
 }
 
+func (c *taskCommand) commandHandlerFunc(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+	tj, err := json.Marshal(task)
+	if err != nil {
+		return nil, err
+	}
+
+	stdinFile, err := os.CreateTemp("", "asyncjob")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(stdinFile.Name())
+	defer stdinFile.Close()
+
+	_, err = stdinFile.Write(tj)
+	if err != nil {
+		return nil, err
+	}
+	stdinFile.Close()
+
+	start := time.Now()
+	log.Infof("Running task %s try %d", task.ID, task.Tries)
+
+	cmd := exec.CommandContext(ctx, c.command)
+	cmd.Env = append(cmd.Env, fmt.Sprintf("CHORIA_AJ_TASK=%s", stdinFile.Name()))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Errorf("Running %s failed: %q", c.command, out)
+		return nil, err
+	}
+
+	log.Infof("Task %s completed after %s and %d tries with %s payload", task.ID, time.Since(start), task.Tries, humanize.IBytes(uint64(len(out))))
+
+	return out, nil
+}
+
 func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
+	if c.command == "" && !c.remote {
+		return fmt.Errorf("either a command or --remote is required")
+	}
+
 	retryPolicy := asyncjobs.RetryDefault
 	switch c.retry {
 	case "1m":
@@ -188,40 +229,11 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 	}
 
 	router := asyncjobs.NewTaskRouter()
-	err = router.HandleFunc(c.ttype, func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
-		tj, err := json.Marshal(task)
-		if err != nil {
-			return nil, err
-		}
-
-		stdinFile, err := os.CreateTemp("", "asyncjob")
-		if err != nil {
-			return nil, err
-		}
-		defer os.Remove(stdinFile.Name())
-		defer stdinFile.Close()
-
-		_, err = stdinFile.Write(tj)
-		if err != nil {
-			return nil, err
-		}
-		stdinFile.Close()
-
-		start := time.Now()
-		log.Infof("Running task %s try %d", task.ID, task.Tries)
-
-		cmd := exec.CommandContext(ctx, c.command)
-		cmd.Env = append(cmd.Env, fmt.Sprintf("CHORIA_AJ_TASK=%s", stdinFile.Name()))
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Errorf("Running %s failed: %q", c.command, out)
-			return nil, err
-		}
-
-		log.Infof("Task %s completed after %s and %d tries with %s payload", task.ID, time.Since(start), task.Tries, humanize.IBytes(uint64(len(out))))
-
-		return json.RawMessage(out), nil
-	})
+	if c.remote {
+		err = router.RequestReply(c.ttype, client)
+	} else {
+		err = router.HandleFunc(c.ttype, c.commandHandlerFunc)
+	}
 	if err != nil {
 		return err
 	}
