@@ -10,8 +10,8 @@ dealing with scheduling, retries, acknowledgements and more of the Work Queue it
 during the lifecycle.
 
 Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable. Job
-handlers are implemented in Go with one process hosting one or many handlers. Per process concurrency and overall per-queue
-concurrency controls exist.
+handlers are implemented in Go with one process hosting one or many handlers. Other languages can implement Job Handlers using
+NATS Request-Reply services. Per process concurrency and overall per-queue concurrency controls exist.
 
 This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
