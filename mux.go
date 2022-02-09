@@ -12,12 +12,6 @@ import (
 	"sync"
 )
 
-// Handler handles tasks
-type Handler interface {
-	// ProcessTask processes a single task, the response bytes will be stored in the original task
-	ProcessTask(ctx context.Context, t *Task) (interface{}, error)
-}
-
 type entryHandler struct {
 	ttype string
 	hf    HandlerFunc
@@ -85,4 +79,10 @@ func (m *Mux) HandleFunc(taskType string, h HandlerFunc) error {
 	})
 
 	return nil
+}
+
+// RequestReply sets up a delegated handler via NATS Request-Reply
+func (m *Mux) RequestReply(taskType string, client *Client) error {
+	h := newRequestReplyHandleFunc(client.opts.nc, taskType)
+	return m.HandleFunc(taskType, h)
 }

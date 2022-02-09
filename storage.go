@@ -45,6 +45,9 @@ const (
 	WorkStreamSubjectWildcard = "CHORIA_AJ.Q.>"
 	// WorkStreamNamePrefix is the prefix that, when removed, reveals the queue name
 	WorkStreamNamePrefix = "CHORIA_AJ_Q_"
+
+	// RequestReplyTaskHandlerPattern is the subject request reply task handlers should listen on by default
+	RequestReplyTaskHandlerPattern = "CHORIA_AJ.H.T.%s"
 )
 
 type jetStreamStorage struct {

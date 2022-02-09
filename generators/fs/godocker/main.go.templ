@@ -14,8 +14,10 @@ import (
 	"github.com/sirupsen/logrus"
 	aj "github.com/choria-io/asyncjobs"
 
-{{ range $handler := .Package.TaskHandlers }}
+{{- range $handler := .Package.TaskHandlers }}
+  {{- if not $handler.RequestReply }}
 	{{ $handler.TaskType | TypeToPackageName }} "{{ $handler.Package }}"
+  {{- end }}
 {{- end }}
 )
 
@@ -23,7 +25,11 @@ var usage = `This is a generated Handler service for the Choria Async Jobs Proje
 
 It hosts the following handlers:
 {{ range $handler := .Package.TaskHandlers }}
+  {{- if $handler.RequestReply }}
  - {{ $handler.TaskType }}: {{ $handler.Package }}@{{ $handler.Version }}
+  {{- else }}
+ - {{ $handler.TaskType}}: Remote Request-Reply Service
+  {{- end }}
 {{- end }}
 
 The following Environment variables are supported:
@@ -103,7 +109,11 @@ func main() {
 
 	router := aj.NewTaskRouter()
 {{ range $handler := .Package.TaskHandlers }}
+  {{- if $handler.RequestReply }}
+	err = router.RequestReply("{{ $handler.TaskType }}", client)
+  {{- else }}
 	err = router.HandleFunc("{{ $handler.TaskType }}", {{ $handler.TaskType | TypeToPackageName }}.AsyncJobHandler)
+  {{- end }}
 	usageIfError(err)
 {{- end }}
 

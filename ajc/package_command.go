@@ -71,10 +71,10 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	table.AddRow("github.com/choria-io/asyncjobs", h.AJVersion)
 	fmt.Println(table.Render())
 
-	table = newTableWriter("Handler Packages")
-	table.AddHeaders("Task Type", "Package", "version")
+	table = newTableWriter("Handler Configuration and Packages")
+	table.AddHeaders("Task Type", "Remote", "Package", "Version")
 	for _, h := range h.TaskHandlers {
-		table.AddRow(h.TaskType, h.Package, h.Version)
+		table.AddRow(h.TaskType, h.RequestReply, h.Package, h.Version)
 	}
 	fmt.Println(table.Render())
 	fmt.Println()
