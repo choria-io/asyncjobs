@@ -13,6 +13,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	aj "github.com/choria-io/asyncjobs"
 )
 
 // GoContainer builds docker containers based on the package spec
@@ -43,6 +45,10 @@ func (g *GoContainer) RenderToDirectory(target string) error {
 		return err
 	}
 
+	if g.Package.RetryPolicy == "" {
+		g.Package.RetryPolicy = "default"
+	}
+
 	for _, p := range g.Package.TaskHandlers {
 		if p.RequestReply {
 			continue
@@ -59,6 +65,9 @@ func (g *GoContainer) RenderToDirectory(target string) error {
 	}
 
 	funcs := map[string]interface{}{
+		"RetryNamesList": func() string {
+			return strings.Join(aj.RetryPolicyNames(), ", ")
+		},
 		"TypeToPackageName": func(t string) string {
 			remove := []string{"_", "-", ":", "/", "\\"}
 			res := t

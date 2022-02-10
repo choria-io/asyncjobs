@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
-	"github.com/choria-io/asyncjobs"
+	aj "github.com/choria-io/asyncjobs"
 	"github.com/dustin/go-humanize"
 	"github.com/nats-io/jsm.go"
 	"github.com/xlab/tablewriter"
@@ -79,18 +80,20 @@ func configureTaskCommand(app *kingpin.Application) {
 	watch := tasks.Command("watch", "Watch job updates in real time").Action(c.watchAction)
 	watch.Flag("task", "Watch for updates related to a specific task ID").StringVar(&c.id)
 
+	policies := aj.RetryPolicyNames()
+
 	process := tasks.Command("process", "Process Tasks from a given queue").Action(c.processAction)
 	process.Arg("type", "Types of Tasks to process").Required().Envar("AJC_TYPE").StringVar(&c.ttype)
 	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("AJC_QUEUE").StringVar(&c.queue)
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
 	process.Arg("command", "The command to invoke for each Task").Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("remote", "Process tasks using a remote request-reply callout").BoolVar(&c.remote)
-	process.Flag("monitor", "Runs monitoring on the given port").IntVar(&c.promPort)
-	process.Flag("backoff", "Selects a backoff policy to apply (1m, 10m, 1h)").EnumVar(&c.retry, "1m", "10m", "1h")
+	process.Flag("monitor", "Runs monitoring on the given port").PlaceHolder("PORT").IntVar(&c.promPort)
+	process.Flag("backoff", fmt.Sprintf("Selects a backoff policy to apply (%s)", strings.Join(policies, ", "))).Default("default").EnumVar(&c.retry, policies...)
 }
 
 func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
-	err := prepare(asyncjobs.BindWorkQueue(c.queue))
+	err := prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}
@@ -104,7 +107,7 @@ func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
 }
 
 func (c *taskCommand) initAction(_ *kingpin.ParseContext) error {
-	err := prepare(asyncjobs.NoStorageInit())
+	err := prepare(aj.NoStorageInit())
 	if err != nil {
 		return err
 	}
@@ -135,9 +138,9 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	target := asyncjobs.EventsSubjectWildcard
+	target := aj.EventsSubjectWildcard
 	if c.id != "" {
-		target = fmt.Sprintf(asyncjobs.TaskStateChangeEventSubjectPattern, c.id)
+		target = fmt.Sprintf(aj.TaskStateChangeEventSubjectPattern, c.id)
 	}
 
 	sub, err := mgr.NatsConn().SubscribeSync(target)
@@ -151,13 +154,13 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 			return err
 		}
 
-		event, kind, err := asyncjobs.ParseEventJSON(msg.Data)
+		event, kind, err := aj.ParseEventJSON(msg.Data)
 		if err != nil {
 			fmt.Printf("Could not parse event: %v\n", err)
 		}
 
 		switch e := event.(type) {
-		case asyncjobs.TaskStateChangeEvent:
+		case aj.TaskStateChangeEvent:
 			if e.LastErr == "" {
 				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s\n", e.TimeStamp.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State)
 			} else {
@@ -170,7 +173,7 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 	}
 }
 
-func (c *taskCommand) commandHandlerFunc(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+func (c *taskCommand) commandHandlerFunc(ctx context.Context, log aj.Logger, task *aj.Task) (interface{}, error) {
 	tj, err := json.Marshal(task)
 	if err != nil {
 		return nil, err
@@ -210,25 +213,16 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 		return fmt.Errorf("either a command or --remote is required")
 	}
 
-	retryPolicy := asyncjobs.RetryDefault
-	switch c.retry {
-	case "1m":
-		retryPolicy = asyncjobs.RetryLinearOneMinute
-	case "10m":
-		retryPolicy = asyncjobs.RetryLinearTenMinutes
-	case "1h":
-		retryPolicy = asyncjobs.RetryLinearOneHour
-	}
-
 	err := prepare(
-		asyncjobs.BindWorkQueue(c.queue),
-		asyncjobs.PrometheusListenPort(c.promPort),
-		asyncjobs.RetryBackoffPolicy(retryPolicy))
+		aj.BindWorkQueue(c.queue),
+		aj.PrometheusListenPort(c.promPort),
+		aj.RetryBackoffPolicyName(c.retry),
+		aj.ClientConcurrency(c.concurrency))
 	if err != nil {
 		return err
 	}
 
-	router := asyncjobs.NewTaskRouter()
+	router := aj.NewTaskRouter()
 	if c.remote {
 		err = router.RequestReply(c.ttype, client)
 	} else {
@@ -401,17 +395,17 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 }
 
 func (c *taskCommand) addAction(_ *kingpin.ParseContext) error {
-	err := prepare(asyncjobs.BindWorkQueue(c.queue))
+	err := prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}
 
-	var opts []asyncjobs.TaskOpt
+	var opts []aj.TaskOpt
 	if c.deadline > 0 {
-		opts = append(opts, asyncjobs.TaskDeadline(time.Now().UTC().Add(c.deadline)))
+		opts = append(opts, aj.TaskDeadline(time.Now().UTC().Add(c.deadline)))
 	}
 
-	task, err := asyncjobs.NewTask(c.ttype, c.payload, opts...)
+	task, err := aj.NewTask(c.ttype, c.payload, opts...)
 	if err != nil {
 		return err
 	}

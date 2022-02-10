@@ -321,6 +321,7 @@ var _ = Describe("Processor", func() {
 
 				router := NewTaskRouter()
 				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (interface{}, error) {
+					// these will panic as its in a different routine, but they are supposed to pass so thats fine
 					t, err := client.LoadTaskByID(task.ID)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(t.State).To(Equal(TaskStateActive))

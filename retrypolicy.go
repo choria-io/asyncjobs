@@ -6,7 +6,9 @@ package asyncjobs
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 )
 
@@ -40,7 +42,47 @@ var (
 
 	retryLinearTenSeconds = linearPolicy(20, 0.1, 500*time.Millisecond, 10*time.Second)
 	retryForTesting       = linearPolicy(1, 0.1, time.Millisecond, 10*time.Millisecond)
+
+	policies = map[string]RetryPolicyProvider{
+		"default": RetryDefault,
+		"1m":      RetryLinearOneMinute,
+		"10m":     RetryLinearTenMinutes,
+		"1h":      RetryLinearOneHour,
+	}
 )
+
+// RetryPolicyNames returns a list of pre-generated retry policies
+func RetryPolicyNames() []string {
+	var names []string
+	for k := range policies {
+		names = append(names, k)
+	}
+
+	sort.Strings(names)
+
+	return names
+}
+
+// RetryPolicyLookup loads a policy by name
+func RetryPolicyLookup(name string) (RetryPolicyProvider, error) {
+	policy, ok := policies[name]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownRetryPolicy, name)
+	}
+
+	return policy, nil
+}
+
+// IsRetryPolicyKnown determines if the named policy exist
+func IsRetryPolicyKnown(name string) bool {
+	for _, p := range RetryPolicyNames() {
+		if p == name {
+			return true
+		}
+	}
+
+	return false
+}
 
 // Duration is the period to sleep for try n, it includes a jitter
 func (p RetryPolicy) Duration(n int) time.Duration {

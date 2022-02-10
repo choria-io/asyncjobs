@@ -22,6 +22,10 @@ type Package struct {
 	Name string `yaml:"name"`
 	// AJVersion is an optional version to use for the choria-io/asyncjobs dependency
 	AJVersion string `yaml:"asyncjobs"`
+	// RetryPolicy is the name of a retry policy, see RetryPolicyNames()
+	RetryPolicy string `yaml:"retry"`
+	// DiscardStates indicates what termination states to discard
+	DiscardStates []string `yaml:"discard"`
 }
 
 // TaskHandler is an individual Task Handler

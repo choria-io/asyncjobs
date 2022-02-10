@@ -4,7 +4,9 @@ WORKDIR /usr/src/app
 
 RUN go mod init "{{ .Package.Name }}" && \
 {{- range $handler := .Package.TaskHandlers }}
+  {{- if not $handler.RequestReply }}
     go get "{{ $handler.Package }}@{{ $handler.Version }}" && \
+  {{- end }}
 {{- end }}
     go get github.com/choria-io/asyncjobs@{{ .Package.AJVersion }}
 
