@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/choria-io/asyncjobs/generators"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -58,6 +59,9 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	if h.Name == "" {
 		h.Name = "choria.io/asyncjobs/handlers"
 	}
+	if h.RetryPolicy == "" {
+		h.RetryPolicy = "default"
+	}
 
 	if len(h.TaskHandlers) == 0 {
 		return fmt.Errorf("no task handlers specified in %s", c.file)
@@ -68,6 +72,12 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	table.AddRow("NATS Context Name", h.ContextName)
 	table.AddRow("Work Queue", h.WorkQueue)
 	table.AddRow("Task Handlers", len(h.TaskHandlers))
+	table.AddRow("Retry Backoff Policy", h.RetryPolicy)
+	if len(h.DiscardStates) > 0 {
+		table.AddRow("End State Discard", strings.Join(h.DiscardStates, ", "))
+	} else {
+		table.AddRow("End State Discard", "none")
+	}
 	table.AddRow("github.com/choria-io/asyncjobs", h.AJVersion)
 	fmt.Println(table.Render())
 

@@ -26,9 +26,9 @@ var usage = `This is a generated Handler service for the Choria Async Jobs Proje
 It hosts the following handlers:
 {{ range $handler := .Package.TaskHandlers }}
   {{- if $handler.RequestReply }}
- - {{ $handler.TaskType }}: {{ $handler.Package }}@{{ $handler.Version }}
-  {{- else }}
  - {{ $handler.TaskType}}: Remote Request-Reply Service
+  {{- else }}
+ - {{ $handler.TaskType }}: {{ $handler.Package }}@{{ $handler.Version }}
   {{- end }}
 {{- end }}
 
@@ -37,6 +37,7 @@ The following Environment variables are supported:
  - AJ_WORK_QUEUE: The Work Queue to consume from, defaults to DEFAULT
  - AJ_NATS_CONTEXT: The name of a NATS Context to use for connections
  - AJ_CONCURRENCY: The number of concurrent handlers that can be run
+ - AJ_RETRY_POLICY: The retry policy to use [{{ RetryNamesList }}]
 
 Prometheus statistics are Exposed on port http://0.0.0.0:8080/metrics
 
@@ -95,15 +96,33 @@ func main() {
 		TimestampFormat: "15:04:05",
 	})
 
+	retryPolicy := os.Getenv("AJ_RETRY_POLICY")
+	if retryPolicy == "" {
+		retryPolicy = "{{ .Package.RetryPolicy }}"
+	}
+
 	log := logrus.NewEntry(logger)
 
-	log.Printf("Connecting using Context %s consuming work queue %s with concurrency %d", nctx, wq, concurrency)
+	log.Printf("Choria Async Jobs Handler Service {{.Package.Name}} build settings")
+	log.Printf("NATS Context: %s", nctx)
+	log.Printf("Work Queue: %s", wq)
+	log.Printf("Concurrency: %d", concurrency)
+	log.Printf("Retry Policy: %s", retryPolicy)
+{{- range $state := .Package.DiscardStates }}
+	log.Printf("Discard State: {{$state}}")
+{{- end }}
+	log.Printf("Prometheus Port: 8080")
+	log = log.WithField("queue", wq)
 
 	client, err := aj.NewClient(
 		aj.NatsContext(nctx),
 		aj.BindWorkQueue(wq),
 		aj.ClientConcurrency(concurrency),
 		aj.CustomLogger(log),
+		aj.RetryBackoffPolicyName(retryPolicy),
+{{- range $state := .Package.DiscardStates }}
+		aj.DiscardTaskStates("{{$state}}"),
+{{- end }}
 		aj.PrometheusListenPort(8080))
 	usageIfError(err)
 

@@ -138,6 +138,18 @@ func RetryBackoffPolicy(p RetryPolicyProvider) ClientOpt {
 	}
 }
 
+// RetryBackoffPolicyName uses the policy named to schedule job retries by using RetryPolicyLookup(name)
+func RetryBackoffPolicyName(name string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		p, err := RetryPolicyLookup(name)
+		if err != nil {
+			return err
+		}
+
+		return RetryBackoffPolicy(p)(opts)
+	}
+}
+
 // ClientConcurrency sets the concurrency to use when executing tasks within this client for horizontal scaling.
 // This is capped by the per-queue maximum concurrency set using the queue setting MaxConcurrent. Generally a
 // queue would have a larger concurrency like 100 (DefaultQueueMaxConcurrent) and an individual task processor
@@ -195,7 +207,7 @@ func BindWorkQueue(queue string) ClientOpt {
 	}
 }
 
-// TaskRetention is the time tasks will be kept with.
+// TaskRetention is the time tasks will be kept for in the task storage
 //
 // Used only when initially creating the underlying streams.
 func TaskRetention(r time.Duration) ClientOpt {
