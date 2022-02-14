@@ -259,6 +259,32 @@ var _ = Describe("Processor", func() {
 			})
 		})
 
+		It("Should not process past max tries tasks, and it should set them to expired", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test", TaskMaxTries(1))
+				task.Tries = 2
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				proc, err := newProcessor(client)
+				Expect(err).ToNot(HaveOccurred())
+
+				<-proc.limiter
+				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
+				Expect(err).To(MatchError(ErrTaskExceedsMaxTries))
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateExpired))
+			})
+		})
+
 		It("Should not process past deadline tasks, and it should set them to expired", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 				client, err := NewClient(NatsConn(nc))
@@ -276,7 +302,7 @@ var _ = Describe("Processor", func() {
 
 				<-proc.limiter
 				err = proc.processMessage(ctx, &ProcessItem{JobID: task.ID})
-				Expect(err).To(MatchError("past deadline"))
+				Expect(err).To(MatchError(ErrTaskPastDeadline))
 
 				task, err = client.LoadTaskByID(task.ID)
 				Expect(err).ToNot(HaveOccurred())

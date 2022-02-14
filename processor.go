@@ -98,6 +98,15 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		return ErrTaskPastDeadline
 	}
 
+	if task.MaxTries > 0 && task.Tries > task.MaxTries {
+		workQueueEntryPastMaxTriesCounter.WithLabelValues(p.queue.Name).Inc()
+		err = p.c.handleTaskExpired(ctx, task)
+		if err != nil {
+			p.log.Warnf("Could not expire task %s: %v", task.ID, err)
+		}
+		return ErrTaskExceedsMaxTries
+	}
+
 	err = p.c.setTaskActive(ctx, task)
 	if err != nil {
 		return fmt.Errorf("%w %s: %v", ErrTaskUpdateFailed, task.State, err)
