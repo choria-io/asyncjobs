@@ -25,7 +25,7 @@ const (
 	TaskStateActive TaskState = "active"
 	// TaskStateRetry tasks that previously failed and are waiting retry
 	TaskStateRetry TaskState = "retry"
-	// TaskStateExpired tasks that reached their deadline
+	// TaskStateExpired tasks that reached their deadline or maximum tries
 	TaskStateExpired TaskState = "expired"
 	// TaskStateTerminated indicates that the task was terminated via the ErrTerminateTask error
 	TaskStateTerminated TaskState = "terminated"
@@ -48,6 +48,9 @@ type Task struct {
 	// Deadline is a cut-off time for the job to complete, should a job be scheduled after this time it will fail.
 	// In-Flight jobs are allowed to continue past this time. Only starting handlers are impacted by this deadline.
 	Deadline *time.Time `json:"deadline,omitempty"`
+	// MaxTries sets a per task maximum try limit. If this task is in a queue that allow fewer tries the queue max tries
+	// will override this setting.  A task may not exceed the work queue max tries
+	MaxTries int `json:"max_tries"`
 	// Result is the outcome of the job, only set for successful jobs
 	Result *TaskResult `json:"result,omitempty"`
 	// State is the most recent recorded state the job is in
@@ -122,6 +125,15 @@ type TaskOpt func(*Task) error
 func TaskDeadline(deadline time.Time) TaskOpt {
 	return func(t *Task) error {
 		t.Deadline = &deadline
+		return nil
+	}
+}
+
+// TaskMaxTries sets a maximum to the amount of processing attempts a task will have, the queue
+// max tries will override this
+func TaskMaxTries(tries int) TaskOpt {
+	return func(t *Task) error {
+		t.MaxTries = tries
 		return nil
 	}
 }

@@ -18,6 +18,8 @@ var (
 	ErrNoTasks = fmt.Errorf("no tasks found")
 	// ErrTaskPastDeadline indicates a task that was scheduled for handling is past its deadline
 	ErrTaskPastDeadline = fmt.Errorf("past deadline")
+	// ErrTaskExceedsMaxTries indicates a task exceeded its maximum attempts
+	ErrTaskExceedsMaxTries = fmt.Errorf("exceeded maximum tries")
 	// ErrTaskAlreadyActive indicates that a task is already in the active state
 	ErrTaskAlreadyActive = fmt.Errorf("task already active")
 	// ErrTaskTypeCannotEnqueue indicates that a task is in a state where it cannot be enqueued as new

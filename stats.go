@@ -36,6 +36,11 @@ var (
 		Help: "The number of work queue process items that referenced tasks past their deadline",
 	}, []string{"queue"})
 
+	workQueueEntryPastMaxTriesCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "task_past_max_tries_count"),
+		Help: "The number of work queue process items that referenced tasks past their maximum try limit",
+	}, []string{"queue"})
+
 	workQueuePollCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "poll_total"),
 		Help: "The number of times a specific queue was polled",
@@ -79,6 +84,7 @@ func init() {
 	prometheus.MustRegister(workQueueEntryCorruptCounter)
 	prometheus.MustRegister(workQueueEntryForUnknownTaskErrorCounter)
 	prometheus.MustRegister(workQueueEntryPastDeadlineCounter)
+	prometheus.MustRegister(workQueueEntryPastMaxTriesCounter)
 	prometheus.MustRegister(workQueuePollCounter)
 	prometheus.MustRegister(workQueuePollErrorCounter)
 
