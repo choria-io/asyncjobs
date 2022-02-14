@@ -26,6 +26,7 @@ type taskCommand struct {
 	payload     string
 	queue       string
 	deadline    time.Duration
+	maxtries    int
 	retention   time.Duration
 	concurrency int
 	command     string
@@ -50,6 +51,7 @@ func configureTaskCommand(app *kingpin.Application) {
 	add.Arg("payload", "The task Payload").Required().StringVar(&c.payload)
 	add.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
 	add.Flag("deadline", "A duration to determine when the latest time that a task handler will be called").DurationVar(&c.deadline)
+	add.Flag("tries", "Sets the maximum amount of times this task may be tried").IntVar(&c.maxtries)
 
 	retry := tasks.Command("retry", "Retries delivery of a task currently in the Task Store").Action(c.retryAction)
 	retry.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
@@ -390,6 +392,9 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	if task.Deadline != nil {
 		fmt.Printf("  Scheduling Deadline: %s\n", task.Deadline.Format(timeFormat))
 	}
+	if task.MaxTries > 0 {
+		fmt.Printf("        Maximum Tries: %s\n", humanize.Comma(int64(task.MaxTries)))
+	}
 
 	return nil
 }
@@ -403,6 +408,10 @@ func (c *taskCommand) addAction(_ *kingpin.ParseContext) error {
 	var opts []aj.TaskOpt
 	if c.deadline > 0 {
 		opts = append(opts, aj.TaskDeadline(time.Now().UTC().Add(c.deadline)))
+	}
+
+	if c.maxtries > 0 {
+		opts = append(opts, aj.TaskMaxTries(c.maxtries))
 	}
 
 	task, err := aj.NewTask(c.ttype, c.payload, opts...)

@@ -98,7 +98,7 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		return ErrTaskPastDeadline
 	}
 
-	if task.MaxTries > 0 && task.Tries > task.MaxTries {
+	if task.MaxTries > 0 && task.Tries >= task.MaxTries {
 		workQueueEntryPastMaxTriesCounter.WithLabelValues(p.queue.Name).Inc()
 		err = p.c.handleTaskExpired(ctx, task)
 		if err != nil {
