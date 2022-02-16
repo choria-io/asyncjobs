@@ -30,6 +30,10 @@ var (
 	ErrTaskAlreadyInState = fmt.Errorf("%w, already in desired state", ErrTaskUpdateFailed)
 	// ErrTaskLoadFailed indicates a task failed for an unknown reason
 	ErrTaskLoadFailed = fmt.Errorf("loading task failed")
+	// ErrTaskTypeRequired indicates an empty task type was given
+	ErrTaskTypeRequired = fmt.Errorf("task type is required")
+	// ErrTaskTypeInvalid indicates an invalid task type was given
+	ErrTaskTypeInvalid = fmt.Errorf("task type is invalid")
 
 	// ErrNoHandlerForTaskType indicates that a task could not be handled by any known handlers
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")
@@ -46,6 +50,8 @@ var (
 	ErrNoNatsConn = fmt.Errorf("no NATS connection supplied")
 	// ErrNoMux indicates that a processor was started with no routing mux configured
 	ErrNoMux = fmt.Errorf("mux is required")
+	// ErrStorageNotReady indicates the underlying storage is not ready
+	ErrStorageNotReady = fmt.Errorf("storage not ready")
 
 	// ErrQueueNotFound is the error indicating a queue does not exist rather than a failure to load
 	ErrQueueNotFound = errors.New("queue not found")
@@ -68,10 +74,27 @@ var (
 	// ErrUnknownRetryPolicy indicates the requested retry policy does not exist
 	ErrUnknownRetryPolicy = fmt.Errorf("unknown retry policy")
 
-	// ErrRequestReplyFailed indicates a callout to a remote handler failed due to a timeout, lack of listerners or network error
+	// ErrRequestReplyFailed indicates a callout to a remote handler failed due to a timeout, lack of listeners or network error
 	ErrRequestReplyFailed = fmt.Errorf("request-reply callout failed")
 	// ErrRequestReplyNoDeadline indicates a request-reply handler was called without a deadline
 	ErrRequestReplyNoDeadline = fmt.Errorf("request-reply requires deadline context")
 	// ErrRequestReplyShortDeadline indicates a deadline context has a too short timeout
-	ErrRequestReplyShortDeadline = fmt.Errorf("request-reply deadline too short")
+	ErrRequestReplyShortDeadline = fmt.Errorf("deadline too short")
+
+	// ErrScheduleNameIsRequired indicates a schedule name is needed when creating new schedules
+	ErrScheduleNameIsRequired = errors.New("name is required")
+	// ErrScheduleNameInvalid indicates the name given to a task is invalid
+	ErrScheduleNameInvalid = errors.New("name is invalid")
+	// ErrScheduleIsRequired indicates a cron schedule must be supplied when creating new schedules
+	ErrScheduleIsRequired = errors.New("schedule is required")
+	// ErrScheduleInvalid indicates an invalid cron schedule was supplied
+	ErrScheduleInvalid = errors.New("invalid cron schedule")
+	// ErrScheduledTaskAlreadyExist indicates a scheduled task that was being created already existed
+	ErrScheduledTaskAlreadyExist = errors.New("scheduled task already exist")
+	// ErrScheduledTaskNotFound indicates the requested task does not exist
+	ErrScheduledTaskNotFound = errors.New("scheduled task not found")
+	// ErrScheduledTaskInvalid indicates a loaded task was invalid
+	ErrScheduledTaskInvalid = errors.New("invalid scheduled task")
+	// ErrScheduledTaskShortDeadline indicates the time allowed for task execution is too short
+	ErrScheduledTaskShortDeadline = errors.New("deadline too short")
 )

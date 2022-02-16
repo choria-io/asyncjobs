@@ -48,14 +48,22 @@ const (
 
 	// RequestReplyTaskHandlerPattern is the subject request reply task handlers should listen on by default
 	RequestReplyTaskHandlerPattern = "CHORIA_AJ.H.T.%s"
+
+	// ConfigBucketName is the KV bucket for configuration like scheduled tasks
+	ConfigBucketName = "CHORIA_AJ_CONFIGURATION"
+
+	// LeaderElectionBucketName is the KV bucket that will manage leader elections
+	LeaderElectionBucketName = "CHORIA_AJ_ELECTIONS"
 )
 
 type jetStreamStorage struct {
 	nc  *nats.Conn
 	mgr *jsm.Manager
 
-	tasks *taskStorage
-	retry RetryPolicyProvider
+	tasks           *taskStorage
+	configBucket    nats.KeyValue
+	leaderElections nats.KeyValue
+	retry           RetryPolicyProvider
 
 	qStreams   map[string]*jsm.Stream
 	qConsumers map[string]*jsm.Consumer
@@ -109,7 +117,7 @@ func (s *jetStreamStorage) PublishTaskStateChangeEvent(ctx context.Context, task
 	}
 
 	target := fmt.Sprintf(TaskStateChangeEventSubjectPattern, task.ID)
-	s.log.Debugf("Publishing lifecycle event %s for task %s to %s", e.TaskType, task.ID, target)
+	s.log.Debugf("Publishing lifecycle event %s for task %s to %s", e.EventType, task.ID, target)
 	return s.nc.Publish(target, ej)
 }
 
@@ -203,6 +211,9 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 		task.LastErr = err.Error()
 		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
+		}
+		if err == nats.ErrNoResponders {
+			return fmt.Errorf("%w: %v", ErrQueueNotFound, err)
 		}
 		return err
 	}
@@ -444,6 +455,19 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 	return s.createQueue(q, replicas, memory)
 }
 
+func (s *jetStreamStorage) ConfigurationInfo() (*nats.KeyValueBucketStatus, error) {
+	if s.configBucket == nil {
+		return nil, fmt.Errorf("%w: configuration bucket not configured", ErrStorageNotReady)
+	}
+
+	st, err := s.configBucket.Status()
+	if err != nil {
+		return nil, err
+	}
+
+	return st.(*nats.KeyValueBucketStatus), nil
+}
+
 func (s *jetStreamStorage) TasksInfo() (*TasksInfo, error) {
 	res := &TasksInfo{
 		Time: time.Now().UTC(),
@@ -490,6 +514,214 @@ func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
 	task.mu.Unlock()
 
 	return task, nil
+}
+
+func (s *jetStreamStorage) DeleteScheduledTaskByName(name string) error {
+	if s.configBucket == nil {
+		return fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
+	}
+
+	return s.configBucket.Delete(fmt.Sprintf("scheduled_tasks.%s", name))
+}
+
+func (s *jetStreamStorage) ScheduledTasks(ctx context.Context) ([]*ScheduledTask, error) {
+	if s.configBucket == nil {
+		return nil, fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
+	}
+
+	wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	watch, err := s.configBucket.Watch("scheduled_tasks.*", nats.Context(wctx))
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []*ScheduledTask
+
+	for {
+		select {
+		case entry := <-watch.Updates():
+			if entry == nil {
+				cancel()
+				return tasks, nil
+			}
+
+			if entry.Operation() != nats.KeyValuePut {
+				continue
+			}
+
+			st := &ScheduledTask{}
+			err = json.Unmarshal(entry.Value(), st)
+			if err != nil {
+				s.log.Errorf("could not process received scheduled task: %v", err)
+				continue
+			}
+
+			tasks = append(tasks, st)
+
+		case <-wctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+func (s *jetStreamStorage) ScheduledTasksWatch(ctx context.Context) (chan *ScheduleWatchEntry, error) {
+	if s.configBucket == nil {
+		return nil, fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
+	}
+
+	watch, err := s.configBucket.Watch("scheduled_tasks.*", nats.Context(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	tasks := make(chan *ScheduleWatchEntry, 100)
+
+	go func() {
+		for {
+			select {
+			case entry := <-watch.Updates():
+				if entry == nil {
+					tasks <- nil
+					continue
+				}
+
+				if entry.Operation() == nats.KeyValueDelete || entry.Operation() == nats.KeyValuePurge {
+					parts := strings.Split(entry.Key(), ".")
+					tasks <- &ScheduleWatchEntry{
+						Name:   parts[len(parts)-1],
+						Delete: true,
+					}
+					continue
+				}
+
+				st := &ScheduledTask{}
+				err = json.Unmarshal(entry.Value(), st)
+				if err != nil {
+					s.log.Errorf("Could not process received scheduled task: %v", err)
+					continue
+				}
+
+				tasks <- &ScheduleWatchEntry{
+					Name: st.Name,
+					Task: st,
+				}
+
+			case <-ctx.Done():
+				s.log.Debugf("Closing watcher due to context interrupt")
+				close(tasks)
+				return
+			}
+		}
+	}()
+
+	return tasks, nil
+}
+
+func (s *jetStreamStorage) LoadScheduledTaskByName(name string) (*ScheduledTask, error) {
+	if s.configBucket == nil {
+		return nil, fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
+	}
+
+	e, err := s.configBucket.Get(fmt.Sprintf("scheduled_tasks.%s", name))
+	if err != nil {
+		if err == nats.ErrKeyNotFound {
+			return nil, ErrScheduledTaskNotFound
+		}
+
+		return nil, err
+	}
+
+	st := &ScheduledTask{}
+	err = json.Unmarshal(e.Value(), st)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrScheduledTaskInvalid, err)
+	}
+
+	return st, nil
+}
+
+func (s *jetStreamStorage) SaveScheduledTask(st *ScheduledTask, update bool) error {
+	if s.configBucket == nil {
+		return fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
+	}
+
+	stj, err := json.Marshal(st)
+	if err != nil {
+		return err
+	}
+
+	key := fmt.Sprintf("scheduled_tasks.%s", st.Name)
+	var rev uint64
+
+	if update {
+		rev, err = s.configBucket.Put(key, stj)
+	} else {
+		rev, err = s.configBucket.Create(key, stj)
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "wrong last sequence") {
+			return ErrScheduledTaskAlreadyExist
+		}
+		return err
+	}
+
+	s.log.Debugf("Stored scheduled task %s in revision %d", key, rev)
+
+	return nil
+}
+
+func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) error {
+	var err error
+
+	if replicas == 0 {
+		replicas = 1
+	}
+
+	js, err := s.nc.JetStream()
+	if err != nil {
+		return err
+	}
+
+	storage := nats.FileStorage
+	if memory {
+		storage = nats.MemoryStorage
+	}
+
+	kv, err := js.KeyValue(ConfigBucketName)
+	if err == nats.ErrBucketNotFound {
+		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+			Bucket:      ConfigBucketName,
+			Description: "Choria Async Jobs Configuration",
+			Storage:     storage,
+			Replicas:    replicas,
+		})
+	}
+	if err != nil {
+		return err
+	}
+
+	s.configBucket = kv
+
+	kv, err = js.KeyValue(LeaderElectionBucketName)
+	if err == nats.ErrBucketNotFound {
+		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+			Bucket:      LeaderElectionBucketName,
+			Description: "Choria Async Jobs Leader Elections",
+			Storage:     storage,
+			Replicas:    replicas,
+			TTL:         10 * time.Second,
+		})
+	}
+	if err != nil {
+		return err
+	}
+
+	s.leaderElections = kv
+
+	return nil
+
 }
 
 func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention time.Duration) error {
@@ -619,6 +851,15 @@ func (s *jetStreamStorage) Queues() ([]*QueueInfo, error) {
 
 func (s *jetStreamStorage) TasksStore() (*jsm.Manager, *jsm.Stream, error) {
 	return s.tasks.mgr, s.tasks.stream, nil
+}
+
+// ElectionStorage gives access to the key-value store used for elections
+func (s *jetStreamStorage) ElectionStorage() (nats.KeyValue, error) {
+	if s.leaderElections == nil {
+		return nil, fmt.Errorf("%s: election bucket not configured", ErrStorageNotReady)
+	}
+
+	return s.leaderElections, nil
 }
 
 func (s *jetStreamStorage) Tasks(ctx context.Context, limit int32) (chan *Task, error) {

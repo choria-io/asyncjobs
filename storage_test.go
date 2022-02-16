@@ -36,6 +36,247 @@ var _ = Describe("Storage", func() {
 		return &Queue{Name: "ginkgo"}
 	}
 
+	Describe("ScheduledTasksWatch", func() {
+		It("Should handle no tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				wctx, cancel := context.WithTimeout(ctx, time.Second)
+				defer cancel()
+
+				tasks, err := storage.ScheduledTasksWatch(wctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				task := <-tasks
+				Expect(task).To(BeNil())
+			})
+		})
+
+		It("Should handle some tasks and nil at the end and then send updates", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				for i := 0; i < 2; i++ {
+					st, _, err := newScheduledTask(fmt.Sprintf("scheduled_%d", i), "@daily", "DEFAULT", "email:new", nil)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = storage.SaveScheduledTask(st, true)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+				wctx, cancel := context.WithTimeout(ctx, time.Second)
+				defer cancel()
+
+				tasks, err := storage.ScheduledTasksWatch(wctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				task := <-tasks
+				Expect(task.Name).To(Equal("scheduled_0"))
+				Expect(task.Task.Name).To(Equal("scheduled_0"))
+				Expect(task.Delete).To(BeFalse())
+				task = <-tasks
+				Expect(task.Name).To(Equal("scheduled_1"))
+				Expect(task.Task.Name).To(Equal("scheduled_1"))
+				Expect(task.Delete).To(BeFalse())
+				task = <-tasks
+				Expect(task).To(BeNil())
+
+				st, _, err := newScheduledTask("scheduled_new", "@daily", "DEFAULT", "email:new", nil)
+				Expect(err).ToNot(HaveOccurred())
+				err = storage.SaveScheduledTask(st, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				task = <-tasks
+				Expect(task.Name).To(Equal("scheduled_new"))
+				Expect(task.Task.Name).To(Equal("scheduled_new"))
+				Expect(task.Delete).To(BeFalse())
+
+				storage.DeleteScheduledTaskByName("scheduled_new")
+				task = <-tasks
+				Expect(task.Name).To(Equal("scheduled_new"))
+				Expect(task.Task).To(BeNil())
+				Expect(task.Delete).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("ScheduledTasks", func() {
+		It("Should handle no tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				tasks, err := storage.ScheduledTasks(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tasks).To(HaveLen(0))
+			})
+		})
+
+		It("Should return found tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				for i := 0; i < 10; i++ {
+					st, _, err := newScheduledTask(fmt.Sprintf("scheduled_%d", i), "@daily", "DEFAULT", "email:new", nil)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = storage.SaveScheduledTask(st, true)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+				tasks, err := storage.ScheduledTasks(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tasks).To(HaveLen(10))
+				Expect(tasks[0].Name).To(Equal("scheduled_0"))
+				Expect(tasks[9].Name).To(Equal("scheduled_9"))
+			})
+		})
+	})
+
+	Describe("LoadScheduledTaskByName", func() {
+		It("Should handle corrupt tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = storage.configBucket.Put("scheduled_tasks.test", []byte("{invalid"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = storage.LoadScheduledTaskByName("test")
+				Expect(err).To(MatchError(ErrScheduledTaskInvalid))
+			})
+		})
+
+		It("Should handle missing tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = storage.LoadScheduledTaskByName("test")
+				Expect(err).To(MatchError(ErrScheduledTaskNotFound))
+			})
+		})
+
+		It("Should load the task", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.SaveScheduledTask(st, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				lst, err := storage.LoadScheduledTaskByName("daily")
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(lst).To(Equal(st))
+			})
+		})
+	})
+
+	Describe("SaveScheduledTask", func() {
+		It("Should support updating a task", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.SaveScheduledTask(st, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				e, err := storage.configBucket.Get(fmt.Sprintf("scheduled_tasks.%s", st.Name))
+				Expect(err).ToNot(HaveOccurred())
+				st = &ScheduledTask{}
+				err = json.Unmarshal(e.Value(), st)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(st.Name).To(Equal("daily"))
+			})
+		})
+
+		It("Should support creating the task", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.SaveScheduledTask(st, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.SaveScheduledTask(st, false)
+				Expect(err).To(MatchError(ErrScheduledTaskAlreadyExist))
+			})
+		})
+	})
+
+	Describe("PrepareConfigurationStore", func() {
+		It("Should support memory", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(true, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				kvs, err := storage.configBucket.Status()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config.Storage).To(Equal(nats.MemoryStorage))
+			})
+		})
+
+		It("Should create the scheduled task store correctly", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareConfigurationStore(false, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				kvs, err := storage.configBucket.Status()
+				Expect(err).ToNot(HaveOccurred())
+				stream := kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config
+				Expect(stream.MaxMsgsPerSubject).To(Equal(int64(1)))
+				Expect(stream.Storage).To(Equal(nats.FileStorage))
+			})
+		})
+	})
+
 	Describe("PrepareTasks", func() {
 		It("Should support memory", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {

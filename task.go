@@ -6,6 +6,7 @@ package asyncjobs
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -85,9 +86,8 @@ type TaskResult struct {
 // NewTask creates a new task of taskType that can later be used to route tasks to handlers.
 // The task will carry a JSON encoded representation of payload.
 func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, error) {
-	p, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	if !IsValidName(taskType) {
+		return nil, fmt.Errorf("%w: must match %s", ErrTaskTypeInvalid, validNameMatcher)
 	}
 
 	id, err := ksuid.NewRandom()
@@ -95,12 +95,23 @@ func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, erro
 		return nil, err
 	}
 
+	if taskType == "" {
+		return nil, ErrTaskTypeRequired
+	}
+
 	t := &Task{
 		ID:        id.String(),
 		Type:      taskType,
-		Payload:   p,
 		CreatedAt: time.Now().UTC(),
 		State:     TaskStateNew,
+	}
+
+	if payload != nil {
+		p, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		t.Payload = p
 	}
 
 	for _, opt := range opts {

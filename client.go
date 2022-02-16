@@ -10,57 +10,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nats-io/jsm.go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-)
-
-const (
-	// DefaultJobRunTime when not configured for a queue this is the default run-time handlers will get
-	DefaultJobRunTime = time.Hour
-	// DefaultMaxTries when not configured for a queue this is the default tries it will get
-	DefaultMaxTries = 10
-	// DefaultQueueMaxConcurrent when not configured for a queue this is the default concurrency setting
-	DefaultQueueMaxConcurrent = 100
 )
 
 // Client connects Task producers and Task handlers to the backend
 type Client struct {
 	opts    *ClientOpts
-	storage *jetStreamStorage
+	storage Storage
 
 	log Logger
-}
-
-// Storage implements the backend access
-type Storage interface {
-	SaveTaskState(ctx context.Context, task *Task, notify bool) error
-	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
-	RetryTaskByID(ctx context.Context, queue *Queue, id string) error
-	LoadTaskByID(id string) (*Task, error)
-	PublishTaskStateChangeEvent(ctx context.Context, task *Task) error
-	AckItem(ctx context.Context, item *ProcessItem) error
-	NakItem(ctx context.Context, item *ProcessItem) error
-	TerminateItem(ctx context.Context, item *ProcessItem) error
-	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)
-	PrepareQueue(q *Queue, replicas int, memory bool) error
-	PrepareTasks(memory bool, replicas int, retention time.Duration) error
-}
-
-// StorageAdmin is helpers to support the CLI mainly, this leaks a bunch of details about JetStream
-// but that's ok, we're not really intending to change the storage or support more
-type StorageAdmin interface {
-	Queues() ([]*QueueInfo, error)
-	QueueNames() ([]string, error)
-	QueueInfo(name string) (*QueueInfo, error)
-	PurgeQueue(name string) error
-	DeleteQueue(name string) error
-	PrepareQueue(q *Queue, replicas int, memory bool) error
-	PrepareTasks(memory bool, replicas int, retention time.Duration) error
-	TasksInfo() (*TasksInfo, error)
-	LoadTaskByID(id string) (*Task, error)
-	DeleteTaskByID(id string) error
-	Tasks(ctx context.Context, limit int32) (chan *Task, error)
-	TasksStore() (*jsm.Manager, *jsm.Stream, error)
 }
 
 // NewClient creates a new client, one of NatsConn() or NatsContext() must be passed, other options are optional.
@@ -141,7 +99,32 @@ func (c *Client) EnqueueTask(ctx context.Context, task *Task) error {
 
 // StorageAdmin access admin features of the storage backend
 func (c *Client) StorageAdmin() StorageAdmin {
-	return c.storage
+	return c.storage.(*jetStreamStorage)
+}
+
+// ScheduledTasksStorage gives access to administrative functions for task maintenance
+func (c *Client) ScheduledTasksStorage() ScheduledTaskStorage {
+	return c.storage.(*jetStreamStorage)
+}
+
+// NewScheduledTask creates a new scheduled task, an existing schedule will result in failure
+func (c *Client) NewScheduledTask(name string, schedule string, queue string, task *Task) error {
+	st, _, err := newScheduledTaskFromTask(name, schedule, queue, task)
+	if err != nil {
+		return err
+	}
+
+	return c.storage.SaveScheduledTask(st, false)
+}
+
+// RemoveScheduledTask removes a scheduled task
+func (c *Client) RemoveScheduledTask(name string) error {
+	return c.storage.DeleteScheduledTaskByName(name)
+}
+
+// LoadScheduledTaskByName loads a scheduled task by name
+func (c *Client) LoadScheduledTaskByName(name string) (*ScheduledTask, error) {
+	return c.storage.LoadScheduledTaskByName(name)
 }
 
 func (c *Client) startPrometheus() {
@@ -155,7 +138,12 @@ func (c *Client) startPrometheus() {
 }
 
 func (c *Client) setupStreams() error {
-	return c.storage.PrepareTasks(c.opts.memoryStore, c.opts.replicas, c.opts.taskRetention)
+	err := c.storage.PrepareTasks(c.opts.memoryStore, c.opts.replicas, c.opts.taskRetention)
+	if err != nil {
+		return err
+	}
+
+	return c.storage.PrepareConfigurationStore(c.opts.memoryStore, c.opts.replicas)
 }
 
 func nowPointer() *time.Time {

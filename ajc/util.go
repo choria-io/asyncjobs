@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -37,6 +38,10 @@ func createLogger() {
 	log = logrus.NewEntry(logger)
 }
 func prepare(copts ...asyncjobs.ClientOpt) error {
+	if client != nil {
+		return nil
+	}
+
 	createLogger()
 
 	if nctx == "" {
@@ -137,6 +142,15 @@ func newTableWriter(title string) *tablewriter.Table {
 	return table
 }
 
+func showConfig(cfg *nats.KeyValueBucketStatus) {
+	si := cfg.StreamInfo()
+
+	fmt.Printf("Configuration Storage: \n\n")
+	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(si.State.Msgs)), humanize.IBytes(si.State.Bytes))
+	fmt.Printf("    Memory Based: %t\n", si.Config.Storage == nats.MemoryStorage)
+	fmt.Printf("        Replicas: %d\n", si.Config.Replicas)
+}
+
 func showTasks(tasks *asyncjobs.TasksInfo) {
 	fmt.Printf("Tasks Storage:\n\n")
 	nfo := tasks.Stream
@@ -149,6 +163,42 @@ func showTasks(tasks *asyncjobs.TasksInfo) {
 	}
 	if !nfo.State.LastTime.IsZero() && nfo.State.LastTime.Unix() != 0 {
 		fmt.Printf("     Last Update: %v (%s)\n", nfo.State.LastTime.Format(timeFormat), humanizeDuration(time.Since(nfo.State.LastTime)))
+	}
+}
+
+func showElectionStatus(kv nats.KeyValue) {
+	status, err := kv.Status()
+	if err != nil {
+		return
+	}
+	kvs := status.(*nats.KeyValueBucketStatus)
+	si := kvs.StreamInfo()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	fmt.Printf("Leader Elections:\n\n")
+
+	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(si.State.Msgs)), humanize.IBytes(si.State.Bytes))
+	fmt.Printf("    Memory Based: %t\n", si.Config.Storage == nats.MemoryStorage)
+	fmt.Printf("        Replicas: %d\n", si.Config.Replicas)
+	fmt.Printf("       Elections: \n")
+	keys, err := kv.Keys(nats.Context(ctx))
+	if err != nil {
+		fmt.Printf("                  Could not determine election status: %v\n", err)
+		return
+	}
+
+	if len(keys) == 0 {
+		fmt.Printf("                  No leader elections active\n")
+	}
+
+	for _, k := range keys {
+		entry, err := kv.Get(k)
+		if err != nil {
+			fmt.Printf("                  Could not get value for %v: %v", k, err)
+		}
+		fmt.Printf("                  %v: %s\n", entry.Key(), string(entry.Value()))
 	}
 }
 
