@@ -172,7 +172,7 @@ var _ = Describe("Processor", func() {
 				err = proc.processMessage(ctx, &ProcessItem{JobID: "does.not.exist"})
 				Expect(err).ToNot(HaveOccurred())
 
-				nfo, err := client.storage.QueueInfo("DEFAULT")
+				nfo, err := client.StorageAdmin().QueueInfo("DEFAULT")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(nfo.Stream.State.Msgs).To(Equal(uint64(0)))
 			})

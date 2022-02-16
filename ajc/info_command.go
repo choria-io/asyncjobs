@@ -26,8 +26,20 @@ func infoAction(_ *kingpin.ParseContext) error {
 	}
 
 	showTasks(tasks)
-
 	fmt.Println()
+
+	cfg, err := admin.ConfigurationInfo()
+	if err != nil {
+		return err
+	}
+	showConfig(cfg)
+	fmt.Println()
+
+	es, err := admin.ElectionStorage()
+	if err == nil {
+		showElectionStatus(es)
+		fmt.Println()
+	}
 
 	queues, err := admin.Queues()
 	if err != nil {

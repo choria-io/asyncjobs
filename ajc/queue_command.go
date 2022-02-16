@@ -64,6 +64,7 @@ func configureQueueCommand(app *kingpin.Application) {
 	cfg.Flag("tries", "Maximum delivery attempts to allow per message, -1 for unlimited").Default("-2").IntVar(&c.maxTries)
 	cfg.Flag("run-time", "Maximum run-time to allow per task").Default("-1s").DurationVar(&c.maxTime)
 	cfg.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default("-2").IntVar(&c.maxConcurrent)
+	cfg.Flag("replicas", "Number of storage replicas to configure").Default("-1").IntVar(&c.replicas)
 }
 
 func (c *queueCommand) addAction(_ *kingpin.ParseContext) error {
@@ -125,6 +126,9 @@ func (c *queueCommand) configureAction(_ *kingpin.ParseContext) error {
 
 	if c.maxEntries > -1 {
 		scfg.MaxMsgs = int64(c.maxEntries)
+	}
+	if c.replicas > 0 {
+		scfg.Replicas = c.replicas
 	}
 	if c.maxTries > -2 {
 		ccfg.MaxDeliver = c.maxTries

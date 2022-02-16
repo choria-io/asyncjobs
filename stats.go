@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	prometheusNamespace = "choria_async_jobs"
+	prometheusNamespace = "choria_asyncjobs"
 
 	enqueueCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "enqueue_count"),
@@ -75,6 +75,26 @@ var (
 		Name: prometheus.BuildFQName(prometheusNamespace, "handler", "runtime"),
 		Help: "Time taken to handle a task",
 	}, []string{"queue", "type"})
+
+	taskSchedulerPausedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "paused"),
+		Help: "Indicates if the scheduler is paused",
+	}, []string{})
+
+	taskSchedulerSchedules = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "schedules_total"),
+		Help: "Indicates how many schedules are known",
+	}, []string{})
+
+	taskSchedulerScheduledCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "scheduled_count"),
+		Help: "Indicates how many times a task was created by the scheduler",
+	}, []string{"type"})
+
+	taskSchedulerScheduleErrorCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "schedule_error_count"),
+		Help: "Indicates how many times a task failed to create",
+	}, []string{"type"})
 )
 
 func init() {
@@ -94,4 +114,9 @@ func init() {
 	prometheus.MustRegister(handlersBusyGauge)
 	prometheus.MustRegister(handlersErroredCounter)
 	prometheus.MustRegister(handlerRunTimeSummary)
+
+	prometheus.MustRegister(taskSchedulerPausedGauge)
+	prometheus.MustRegister(taskSchedulerSchedules)
+	prometheus.MustRegister(taskSchedulerScheduledCount)
+	prometheus.MustRegister(taskSchedulerScheduleErrorCount)
 }

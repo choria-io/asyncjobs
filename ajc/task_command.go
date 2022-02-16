@@ -78,20 +78,22 @@ func configureTaskCommand(app *kingpin.Application) {
 
 	config := tasks.Command("configure", "Configures the Task storage").Alias("config").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
+	config.Arg("replicas", "How many replicas to keep in a JetStream cluster").Required().IntVar(&c.replicas)
 
 	watch := tasks.Command("watch", "Watch job updates in real time").Action(c.watchAction)
 	watch.Flag("task", "Watch for updates related to a specific task ID").StringVar(&c.id)
 
 	policies := aj.RetryPolicyNames()
-
 	process := tasks.Command("process", "Process Tasks from a given queue").Action(c.processAction)
 	process.Arg("type", "Types of Tasks to process").Required().Envar("AJC_TYPE").StringVar(&c.ttype)
 	process.Arg("queue", "The Queue to consume Tasks from").Required().Envar("AJC_QUEUE").StringVar(&c.queue)
 	process.Arg("concurrency", "How many concurrent Tasks to process").Required().Envar("AJC_CONCURRENCY").IntVar(&c.concurrency)
 	process.Arg("command", "The command to invoke for each Task").Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("remote", "Process tasks using a remote request-reply callout").BoolVar(&c.remote)
-	process.Flag("monitor", "Runs monitoring on the given port").PlaceHolder("PORT").IntVar(&c.promPort)
+	process.Flag("monitor", "Runs monitoring on the given port").PlaceHolder("AJC_MONITOR").IntVar(&c.promPort)
 	process.Flag("backoff", fmt.Sprintf("Selects a backoff policy to apply (%s)", strings.Join(policies, ", "))).Default("default").EnumVar(&c.retry, policies...)
+
+	configureTaskCronCommand(tasks)
 }
 
 func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
@@ -286,7 +288,7 @@ func (c *taskCommand) configAction(_ *kingpin.ParseContext) error {
 		return err
 	}
 
-	err = tasks.UpdateConfiguration(*cfg, jsm.MaxAge(c.retention))
+	err = tasks.UpdateConfiguration(*cfg, jsm.MaxAge(c.retention), jsm.Replicas(c.replicas))
 	if err != nil {
 		return err
 	}
@@ -373,6 +375,7 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	}
 
 	fmt.Printf("Task %s created at %s\n\n", task.ID, task.CreatedAt.Format(timeFormat))
+	fmt.Printf("            Task Type: %s\n", task.Type)
 	fmt.Printf("              Payload: %s\n", humanize.IBytes(uint64(len(task.Payload))))
 	fmt.Printf("               Status: %s\n", task.State)
 	if task.Result != nil {
