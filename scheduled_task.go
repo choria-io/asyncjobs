@@ -25,9 +25,9 @@ type ScheduledTask struct {
 	// Payload is the task payload for the enqueued tasks
 	Payload []byte `json:"payload"`
 	// Deadline is the time after scheduling that the deadline would be
-	Deadline time.Duration
+	Deadline time.Duration `json:"deadline,omitempty"`
 	// MaxTries is how many times the created task could be tried
-	MaxTries int
+	MaxTries int `json:"max_tries"`
 	// CreatedAt is when the schedule was created
 	CreatedAt time.Time `json:"created_at"`
 }

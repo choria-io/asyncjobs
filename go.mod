@@ -6,7 +6,7 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.3.2
 	github.com/dustin/go-humanize v1.0.0
 	github.com/nats-io/jsm.go v0.0.28-0.20220128163911-90cd1007b323
-	github.com/nats-io/nats-server/v2 v2.7.3-0.20220214175354-ae9bb19d66eb
+	github.com/nats-io/nats-server/v2 v2.7.3-0.20220216011455-ea20cb4cb7ed
 	github.com/nats-io/nats.go v1.13.1-0.20220216000616-0096b1bfae8d
 	github.com/onsi/ginkgo/v2 v2.1.1
 	github.com/onsi/gomega v1.17.0
