@@ -195,7 +195,7 @@ func (s *TaskScheduler) handlerFactory(name string) func() {
 		nt, err := NewTask(task.item.TaskType, task.item.Payload, opts...)
 		if err != nil {
 			s.log.Warnf("Could not create new task to schedule for scheduled task %s in queue %s: %s", name, err)
-			taskSchedulerScheduleErrorCount.WithLabelValues(task.item.TaskType)
+			taskSchedulerScheduleErrorCount.WithLabelValues(task.item.TaskType, task.item.Queue)
 			return
 		}
 
@@ -203,11 +203,11 @@ func (s *TaskScheduler) handlerFactory(name string) func() {
 		err = s.s.EnqueueTask(s.ctx, &Queue{Name: task.item.Queue}, nt)
 		if err != nil {
 			s.log.Warnf("Enqueueing new task for scheduled task %s failed: %s", name, err)
-			taskSchedulerScheduleErrorCount.WithLabelValues(task.item.TaskType)
+			taskSchedulerScheduleErrorCount.WithLabelValues(task.item.TaskType, task.item.Queue)
 			return
 		}
 
-		taskSchedulerScheduledCount.WithLabelValues(task.item.TaskType)
+		taskSchedulerScheduledCount.WithLabelValues(task.item.TaskType, task.item.Queue)
 	}
 }
 
