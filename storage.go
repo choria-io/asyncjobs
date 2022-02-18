@@ -36,6 +36,10 @@ const (
 	TaskStateChangeEventSubjectPattern = "CHORIA_AJ.E.task_state.%s"
 	// TaskStateChangeEventSubjectWildcard is a NATS wildcard for receiving all TaskStateChangeEvent messages
 	TaskStateChangeEventSubjectWildcard = "CHORIA_AJ.E.task_state.*"
+	// LeaderElectedEventSubjectPattern is the pattern for determining the event publish subject
+	LeaderElectedEventSubjectPattern = "CHORIA_AJ.E.leader_election.%s"
+	// LeaderElectedEventSubjectWildcard is the NATS wildcard for receiving all LeaderElectedEvent messages
+	LeaderElectedEventSubjectWildcard = "CHORIA_AJ.E.leader_election.>"
 
 	// WorkStreamNamePattern is the printf pattern for determining JetStream Stream names per queue
 	WorkStreamNamePattern = "CHORIA_AJ_Q_%s"
@@ -103,6 +107,21 @@ func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*je
 	}
 
 	return s, nil
+}
+
+func (s *jetStreamStorage) PublishLeaderElectedEvent(ctx context.Context, name string, component string) error {
+	e, err := NewLeaderElectedEvent(name, component)
+	if err != nil {
+		return err
+	}
+	ej, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+
+	target := fmt.Sprintf(LeaderElectedEventSubjectPattern, component)
+	s.log.Debugf("Publishing lifecycle event %s for %s of component type %s", e.EventType, name, component)
+	return s.nc.Publish(target, ej)
 }
 
 func (s *jetStreamStorage) PublishTaskStateChangeEvent(ctx context.Context, task *Task) error {

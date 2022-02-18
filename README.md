@@ -30,10 +30,7 @@ This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asyn
 
 ## Status
 
-This is a brand-new project, under heavy development. Interfaces might change,
-Structures might change, features might be removed if it's found to be a bad fit for the underlying storage.
-
-Use with care.
+This is a brand-new project, under heavy development. The core Task handling is in good shape and reasonably stable. Task Scheduler is still subject to some change.
 
 ## Synopsis
 

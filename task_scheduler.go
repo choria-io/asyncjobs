@@ -62,6 +62,8 @@ func (s *TaskScheduler) onWon() {
 	taskSchedulerPausedGauge.WithLabelValues().Set(0)
 	s.mu.Unlock()
 
+	s.s.PublishLeaderElectedEvent(s.ctx, s.name, "task_scheduler")
+
 	s.log.Infof("Became leader, tasks will be scheduled")
 }
 
