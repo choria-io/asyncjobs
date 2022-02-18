@@ -51,6 +51,7 @@ type ScheduledTaskStorage interface {
 	ScheduledTasksWatch(ctx context.Context) (chan *ScheduleWatchEntry, error)
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
 	ElectionStorage() (nats.KeyValue, error)
+	PublishLeaderElectedEvent(ctx context.Context, name string, component string) error
 }
 
 // Storage implements the backend access

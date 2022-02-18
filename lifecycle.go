@@ -39,9 +39,22 @@ type TaskStateChangeEvent struct {
 	Age time.Duration `json:"task_age,omitempty"`
 }
 
+// LeaderElectedEvent notifies that a leader election was won
+type LeaderElectedEvent struct {
+	BaseEvent
+
+	// Name of the process that gained leadership
+	Name string `json:"name"`
+	// Component is the component that is reporting
+	Component string `json:"component"`
+}
+
 const (
-	// TaskStateChangeEventType is the event type for TaskStateChangeEvent types
+	// TaskStateChangeEventType is the event type for TaskStateChangeEvent events
 	TaskStateChangeEventType = "io.choria.asyncjobs.v1.task_state"
+
+	// LeaderElectedEventType is the event type for LeaderElectedEvent events
+	LeaderElectedEventType = "io.choria.asyncjobs.v1.leader_elected"
 )
 
 // ParseEventJSON parses event bytes returning the parsed Event and its event type
@@ -61,9 +74,36 @@ func ParseEventJSON(event []byte) (interface{}, string, error) {
 		}
 
 		return e, base.EventType, nil
+
+	case LeaderElectedEventType:
+		var e LeaderElectedEvent
+		err := json.Unmarshal(event, &e)
+		if err != nil {
+			return nil, "", err
+		}
+
+		return e, base.EventType, nil
 	default:
 		return nil, base.EventType, fmt.Errorf("%w: %s", ErrUnknownEventType, base.EventType)
 	}
+}
+
+// NewLeaderElectedEvent creates a new event notifying of a leader election win
+func NewLeaderElectedEvent(name string, component string) (*LeaderElectedEvent, error) {
+	eid, err := ksuid.NewRandom()
+	if err != nil {
+		return nil, err
+	}
+
+	return &LeaderElectedEvent{
+		Name:      name,
+		Component: component,
+		BaseEvent: BaseEvent{
+			EventID:   eid.String(),
+			TimeStamp: eid.Time().UTC(),
+			EventType: LeaderElectedEventType,
+		},
+	}, nil
 }
 
 // NewTaskStateChangeEvent creates a new event notifying of a change in task state
