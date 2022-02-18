@@ -21,20 +21,22 @@ import (
 )
 
 type taskCommand struct {
-	id          string
-	ttype       string
-	payload     string
-	queue       string
-	deadline    time.Duration
-	maxtries    int
-	retention   time.Duration
-	concurrency int
-	command     string
-	promPort    int
-	memory      bool
-	replicas    int
-	retry       string
-	remote      bool
+	id              string
+	ttype           string
+	payload         string
+	queue           string
+	deadline        time.Duration
+	maxtries        int
+	retention       time.Duration
+	concurrency     int
+	command         string
+	promPort        int
+	memory          bool
+	replicas        int
+	retry           string
+	remote          bool
+	discardComplete bool
+	discardExpired  bool
 
 	limit int
 	json  bool
@@ -91,6 +93,8 @@ func configureTaskCommand(app *kingpin.Application) {
 	process.Arg("command", "The command to invoke for each Task").Envar("AJC_COMMAND").ExistingFileVar(&c.command)
 	process.Flag("remote", "Process tasks using a remote request-reply callout").BoolVar(&c.remote)
 	process.Flag("monitor", "Runs monitoring on the given port").PlaceHolder("AJC_MONITOR").IntVar(&c.promPort)
+	process.Flag("discard-complete", "Discard messages in the 'complete' state").BoolVar(&c.discardComplete)
+	process.Flag("discard-expired", "Discard messages in the 'expired' state").BoolVar(&c.discardExpired)
 	process.Flag("backoff", fmt.Sprintf("Selects a backoff policy to apply (%s)", strings.Join(policies, ", "))).Default("default").EnumVar(&c.retry, policies...)
 
 	configureTaskCronCommand(tasks)
@@ -217,11 +221,20 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 		return fmt.Errorf("either a command or --remote is required")
 	}
 
-	err := prepare(
+	copts := []aj.ClientOpt{
 		aj.BindWorkQueue(c.queue),
 		aj.PrometheusListenPort(c.promPort),
 		aj.RetryBackoffPolicyName(c.retry),
-		aj.ClientConcurrency(c.concurrency))
+		aj.ClientConcurrency(c.concurrency)}
+
+	if c.discardComplete {
+		copts = append(copts, aj.DiscardTaskStates(aj.TaskStateCompleted))
+	}
+	if c.discardExpired {
+		copts = append(copts, aj.DiscardTaskStates(aj.TaskStateExpired))
+	}
+
+	err := prepare(copts...)
 	if err != nil {
 		return err
 	}
