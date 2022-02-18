@@ -12,52 +12,52 @@ var (
 	prometheusNamespace = "choria_asyncjobs"
 
 	enqueueCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "enqueue_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "enqueue_count"),
 		Help: "The number of jobs that were enqueued",
 	}, []string{"queue"})
 
 	enqueueErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "enqueue_error_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "enqueue_error_count"),
 		Help: "The number of jobs that failed to enqueued",
 	}, []string{"queue"})
 
 	workQueueEntryCorruptCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "item_corrupt_error_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "item_corrupt_error_count"),
 		Help: "The number of work queue process items that were corrupt",
 	}, []string{"queue"})
 
 	workQueueEntryForUnknownTaskErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "task_not_found_error_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "task_not_found_error_count"),
 		Help: "The number of work queue process items that referenced tasks that could not be found",
 	}, []string{"queue"})
 
 	workQueueEntryPastDeadlineCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "task_past_deadline_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "task_past_deadline_count"),
 		Help: "The number of work queue process items that referenced tasks past their deadline",
 	}, []string{"queue"})
 
 	workQueueEntryPastMaxTriesCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "task_past_max_tries_count"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "task_past_max_tries_count"),
 		Help: "The number of work queue process items that referenced tasks past their maximum try limit",
 	}, []string{"queue"})
 
 	workQueuePollCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "poll_total"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "poll_total"),
 		Help: "The number of times a specific queue was polled",
 	}, []string{"queue"})
 
 	workQueuePollErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "queues", "poll_error_total"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "queue", "poll_error_total"),
 		Help: "The number of times a specific queue poll failed",
 	}, []string{"queue"})
 
 	taskUpdateCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "tasks", "task_update_total"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "task", "update_total"),
 		Help: "The number of task updates that succeeded",
 	}, []string{"state"})
 
 	taskUpdateErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prometheus.BuildFQName(prometheusNamespace, "tasks", "task_update_error_total"),
+		Name: prometheus.BuildFQName(prometheusNamespace, "task", "update_error_total"),
 		Help: "The number of task updates that failed",
 	}, []string{})
 
@@ -89,12 +89,12 @@ var (
 	taskSchedulerScheduledCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "scheduled_count"),
 		Help: "Indicates how many times a task was created by the scheduler",
-	}, []string{"type"})
+	}, []string{"type", "queue"})
 
 	taskSchedulerScheduleErrorCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "task_scheduler", "schedule_error_count"),
 		Help: "Indicates how many times a task failed to create",
-	}, []string{"type"})
+	}, []string{"type", "queue"})
 )
 
 func init() {

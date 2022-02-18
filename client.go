@@ -134,7 +134,12 @@ func (c *Client) startPrometheus() {
 
 	c.log.Warnf("Exposing Prometheus metrics on port %d", c.opts.statsPort)
 	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(fmt.Sprintf(":%d", c.opts.statsPort), nil)
+	go func() {
+		err := http.ListenAndServe(fmt.Sprintf(":%d", c.opts.statsPort), nil)
+		if err != nil {
+			c.log.Errorf("Could not start Prometheus listener on %d: %s", c.opts.statsPort, err)
+		}
+	}()
 }
 
 func (c *Client) setupStreams() error {
@@ -173,6 +178,8 @@ func (c *Client) saveOrDiscardTaskIfDesired(ctx context.Context, t *Task) error 
 	if !c.shouldDiscardTask(t) {
 		return c.storage.SaveTaskState(ctx, t, true)
 	}
+
+	c.storage.PublishTaskStateChangeEvent(ctx, t)
 
 	c.log.Debugf("Discarding task with state %s based on desired discards %q", t.State, c.opts.discard)
 	return c.storage.DeleteTaskByID(t.ID)
