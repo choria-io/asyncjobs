@@ -2,7 +2,10 @@
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates && \
+    addgroup -g 2048 asyncjobs && \
+    adduser -u 2048 -h /home/asyncjobs -g "Choria Asynchronous Jobs" -S -D -H -G asyncjobs asyncjobs
 
+USER asyncjobs
 ENTRYPOINT ["/usr/bin/ajc"]
 COPY ajc /usr/bin/ajc
