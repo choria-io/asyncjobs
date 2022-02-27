@@ -17,7 +17,8 @@ RUN go mod tidy -compat=1.17 && \
 
 FROM alpine:latest
 
-RUN adduser -DHg "Choria Async Jobs" choria && \
+RUN addgroup -g 2048 asyncjobs && \
+    adduser -u 2048 -h /home/asyncjobs -g "Choria Asynchronous Jobs" -S -D -H -G asyncjobs asyncjobs && \
     mkdir /lib64 && \
     ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2 && \
     apk --no-cache add ca-certificates && \
@@ -27,7 +28,7 @@ COPY --from=builder /app /handler/app
 
 EXPOSE 8080/tcp
 
-USER choria
+USER asyncjobs
 
 ENV XDG_CONFIG_HOME "/handler/config"
 ENV AJ_WORK_QUEUE "{{ .Package.WorkQueue }}"
