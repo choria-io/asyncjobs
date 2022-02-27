@@ -269,7 +269,7 @@ func (c *taskCommand) purgeAction(_ *kingpin.ParseContext) error {
 			return err
 		}
 
-		ok, err := askConfirmation(fmt.Sprintf("Really purge the Task Store of %d entries, work queue entries will not be removed", nfo.Msgs), false)
+		ok, err := askConfirmation(fmt.Sprintf("Really purge the Task Store of %s entries, work queue entries will not be removed", humanize.Comma(int64(nfo.Msgs))), false)
 		if err != nil || !ok {
 			return err
 		}
