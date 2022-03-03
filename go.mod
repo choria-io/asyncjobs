@@ -2,6 +2,10 @@ module github.com/choria-io/asyncjobs
 
 go 1.17
 
+// this should not be needed, but something somewhere is putting jwt v1 in go.sum
+// triggering github security alerts, the dependency is unused
+replace github.com/nats-io/jwt v1.2.2 => github.com/nats-io/jwt/v2 v2.2.0
+
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.2
 	github.com/dustin/go-humanize v1.0.0

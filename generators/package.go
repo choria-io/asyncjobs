@@ -38,4 +38,6 @@ type TaskHandler struct {
 	Version string `yaml:"version"`
 	// RequestReply indicates the handler is a callout to a remote service
 	RequestReply bool `yaml:"remote"`
+	// Command indicates the handler is a callout to a command in the given file
+	Command string `yaml:"command"`
 }

@@ -15,7 +15,7 @@ import (
 	aj "github.com/choria-io/asyncjobs"
 
 {{- range $handler := .Package.TaskHandlers }}
-  {{- if not $handler.RequestReply }}
+  {{- if $handler.Package }}
 	{{ $handler.TaskType | TypeToPackageName }} "{{ $handler.Package }}"
   {{- end }}
 {{- end }}
@@ -27,6 +27,8 @@ It hosts the following handlers:
 {{ range $handler := .Package.TaskHandlers }}
   {{- if $handler.RequestReply }}
  - {{ $handler.TaskType}}: Remote Request-Reply Service
+  {{- else if $handler.Command }}
+ - {{ $handler.TaskType}}: Using command /handler/commands/{{ $handler.Command }}
   {{- else }}
  - {{ $handler.TaskType }}: {{ $handler.Package }}@{{ $handler.Version }}
   {{- end }}
@@ -130,6 +132,8 @@ func main() {
 {{ range $handler := .Package.TaskHandlers }}
   {{- if $handler.RequestReply }}
 	err = router.RequestReply("{{ $handler.TaskType }}", client)
+  {{- else if $handler.Command }}
+	err = router.ExternalProcess("{{ $handler.TaskType }}", "/handler/commands/{{ $handler.Command }}")
   {{- else }}
 	err = router.HandleFunc("{{ $handler.TaskType }}", {{ $handler.TaskType | TypeToPackageName }}.AsyncJobHandler)
   {{- end }}

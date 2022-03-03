@@ -67,7 +67,10 @@ var (
 	ErrInvalidQueueState = fmt.Errorf("invalid queue storage state")
 	// ErrDuplicateItem indicates that the Work Queue deduplication protection refused a message
 	ErrDuplicateItem = fmt.Errorf("duplicate work queue item")
-
+	// ErrExternalCommandNotFound indicates a command for an ExternalProcess handler was not found
+	ErrExternalCommandNotFound = fmt.Errorf("command not found")
+	// ErrExternalCommandFailed indicates a command for an ExternalProcess handler failed
+	ErrExternalCommandFailed = fmt.Errorf("execution failed")
 	// ErrUnknownEventType indicates that while parsing an event an unknown type of event was encountered
 	ErrUnknownEventType = fmt.Errorf("unknown event type")
 
