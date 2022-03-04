@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 RUN go mod init "{{ .Package.Name }}" && \
 {{- range $handler := .Package.TaskHandlers }}
-  {{- if not $handler.RequestReply }}
+  {{- if $handler.Package }}
     go get "{{ $handler.Package }}@{{ $handler.Version }}" && \
   {{- end }}
 {{- end }}
@@ -12,8 +12,8 @@ RUN go mod init "{{ .Package.Name }}" && \
 
 COPY main.go /usr/src/app/main.go
 
-RUN go mod tidy -compat=1.17 && \
-    go build -v -o /app -ldflags="-s -w -extldflags=-static"
+RUN go mod tidy -compat=1.17
+RUN go build -v -o /app -ldflags="-s -w -extldflags=-static"
 
 FROM alpine:latest
 
@@ -25,6 +25,11 @@ RUN addgroup -g 2048 asyncjobs && \
     mkdir -p /handler/config
 
 COPY --from=builder /app /handler/app
+{{- range $handler := .Package.TaskHandlers }}
+  {{- if $handler.Command }}
+COPY ./commands/{{ $handler.Command }} /handler/commands/{{ $handler.Command }}
+  {{- end }}
+{{- end }}
 
 EXPOSE 8080/tcp
 

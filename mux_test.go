@@ -12,6 +12,41 @@ import (
 )
 
 var _ = Describe("Router", func() {
+	Describe("ExternalProcess", func() {
+		var (
+			task   *Task
+			err    error
+			router *Mux
+		)
+		BeforeEach(func() {
+			task, err = NewTask("email:new", nil)
+			Expect(err).ToNot(HaveOccurred())
+			router = NewTaskRouter()
+		})
+
+		It("Should handle missing commands", func() {
+			Expect(router.ExternalProcess("email:new", "testdata/missing.sh")).ToNot(HaveOccurred())
+			handler := router.Handler(task)
+			_, err = handler(context.Background(), &defaultLogger{}, task)
+			Expect(err).To(MatchError(ErrExternalCommandNotFound))
+		})
+
+		It("Should handle command failures", func() {
+			Expect(router.ExternalProcess("email:new", "testdata/failing-handler.sh")).ToNot(HaveOccurred())
+			handler := router.Handler(task)
+			_, err = handler(context.Background(), &defaultLogger{}, task)
+			Expect(err).To(MatchError(ErrExternalCommandFailed))
+		})
+
+		It("Should handle success", func() {
+			Expect(router.ExternalProcess("email:new", "testdata/passing-handler.sh")).ToNot(HaveOccurred())
+			handler := router.Handler(task)
+			payload, err := handler(context.Background(), &defaultLogger{}, task)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).To(Equal("success\n"))
+		})
+	})
+
 	Describe("Handler", func() {
 		It("Should support default handler", func() {
 			router := NewTaskRouter()

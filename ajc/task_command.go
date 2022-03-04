@@ -6,10 +6,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -181,41 +178,6 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 	}
 }
 
-func (c *taskCommand) commandHandlerFunc(ctx context.Context, log aj.Logger, task *aj.Task) (interface{}, error) {
-	tj, err := json.Marshal(task)
-	if err != nil {
-		return nil, err
-	}
-
-	stdinFile, err := os.CreateTemp("", "asyncjob")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(stdinFile.Name())
-	defer stdinFile.Close()
-
-	_, err = stdinFile.Write(tj)
-	if err != nil {
-		return nil, err
-	}
-	stdinFile.Close()
-
-	start := time.Now()
-	log.Infof("Running task %s try %d", task.ID, task.Tries)
-
-	cmd := exec.CommandContext(ctx, c.command)
-	cmd.Env = append(cmd.Env, fmt.Sprintf("CHORIA_AJ_TASK=%s", stdinFile.Name()))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Errorf("Running %s failed: %q", c.command, out)
-		return nil, err
-	}
-
-	log.Infof("Task %s completed after %s and %d tries with %s payload", task.ID, time.Since(start), task.Tries, humanize.IBytes(uint64(len(out))))
-
-	return out, nil
-}
-
 func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 	if c.command == "" && !c.remote {
 		return fmt.Errorf("either a command or --remote is required")
@@ -243,7 +205,7 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 	if c.remote {
 		err = router.RequestReply(c.ttype, client)
 	} else {
-		err = router.HandleFunc(c.ttype, c.commandHandlerFunc)
+		err = router.ExternalProcess(c.ttype, c.command)
 	}
 	if err != nil {
 		return err
