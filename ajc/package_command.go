@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/choria-io/asyncjobs"
 	"github.com/choria-io/asyncjobs/generators"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/yaml.v2"
@@ -82,9 +83,16 @@ func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
 	fmt.Println(table.Render())
 
 	table = newTableWriter("Handler Configuration and Packages")
-	table.AddHeaders("Task Type", "Remote", "Package", "Version")
+	table.AddHeaders("Task Type", "Handler Kind", "Detail")
 	for _, h := range h.TaskHandlers {
-		table.AddRow(h.TaskType, h.RequestReply, h.Package, h.Version)
+		switch {
+		case h.Command != "":
+			table.AddRow(h.TaskType, "External Command", h.Command)
+		case h.Package != "":
+			table.AddRow(h.TaskType, "Go Package", fmt.Sprintf("%s@%s", h.Package, h.Version))
+		default:
+			table.AddRow(h.TaskType, "Request-Reply Service", asyncjobs.RequestReplySubjectForTaskType(h.TaskType))
+		}
 	}
 	fmt.Println(table.Render())
 	fmt.Println()
