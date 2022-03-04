@@ -39,16 +39,17 @@ func newRequestReplyHandleFunc(nc *nats.Conn, tt string) HandlerFunc {
 		tt: tt,
 	}
 
-	h.subj = h.subjectForType()
+	h.subj = RequestReplySubjectForTaskType(tt)
 
 	return h.processTask
 }
 
-func (r *requestReplyHandler) subjectForType() string {
-	if r.tt == "" {
+// RequestReplySubjectForTaskType returns the subject a request-reply handler should listen on for a specified task type
+func RequestReplySubjectForTaskType(taskType string) string {
+	if taskType == "" {
 		return fmt.Sprintf(RequestReplyTaskHandlerPattern, "catchall")
 	}
-	return fmt.Sprintf(RequestReplyTaskHandlerPattern, r.tt)
+	return fmt.Sprintf(RequestReplyTaskHandlerPattern, taskType)
 }
 
 func (r *requestReplyHandler) processTask(ctx context.Context, logger Logger, task *Task) (interface{}, error) {
