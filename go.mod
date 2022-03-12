@@ -10,8 +10,8 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.3.2
 	github.com/dustin/go-humanize v1.0.0
 	github.com/nats-io/jsm.go v0.0.29
-	github.com/nats-io/nats-server/v2 v2.7.3
-	github.com/nats-io/nats.go v1.13.1-0.20220216000616-0096b1bfae8d
+	github.com/nats-io/nats-server/v2 v2.7.4
+	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
 	github.com/prometheus/client_golang v1.12.1
