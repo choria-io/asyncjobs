@@ -71,6 +71,20 @@ var _ = Describe("Client", func() {
 		log.SetOutput(GinkgoWriter)
 	})
 
+	Describe("DiscardTaskStatesByName", func() {
+		It("Should correctly parse state names", func() {
+			opts := &ClientOpts{}
+			Expect(DiscardTaskStatesByName("complete")(opts)).ToNot(HaveOccurred())
+			Expect(opts.discard).To(HaveLen(1))
+			Expect(opts.discard[0]).To(Equal(TaskStateCompleted))
+
+			opts = &ClientOpts{}
+			Expect(DiscardTaskStatesByName("completed")(opts)).ToNot(HaveOccurred())
+			Expect(opts.discard).To(HaveLen(1))
+			Expect(opts.discard[0]).To(Equal(TaskStateCompleted))
+		})
+	})
+
 	Describe("shouldDiscardTask", func() {
 		It("Should correctly detect task states", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
