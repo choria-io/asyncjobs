@@ -123,7 +123,7 @@ func main() {
 		aj.CustomLogger(log),
 		aj.RetryBackoffPolicyName(retryPolicy),
 {{- range $state := .Package.DiscardStates }}
-		aj.DiscardTaskStates("{{$state}}"),
+		aj.DiscardTaskStatesByName("{{$state}}"),
 {{- end }}
 		aj.PrometheusListenPort(8080))
 	usageIfError(err)

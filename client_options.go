@@ -46,6 +46,25 @@ func DiscardTaskStates(states ...TaskState) ClientOpt {
 	}
 }
 
+// DiscardTaskStatesByName configures the client to discard Tasks that reach a final state in the list of supplied TaskState
+func DiscardTaskStatesByName(states ...string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		for _, s := range states {
+			state, ok := nameToTaskState[s]
+			if !ok {
+				return fmt.Errorf("%w: %s", ErrUnknownDiscardPolicy, s)
+			}
+
+			err := DiscardTaskStates(state)(opts)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
+
 // NoStorageInit skips setting up any queues or task stores when creating a client
 func NoStorageInit() ClientOpt {
 	return func(opts *ClientOpts) error {

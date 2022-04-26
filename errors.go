@@ -77,6 +77,9 @@ var (
 	// ErrUnknownRetryPolicy indicates the requested retry policy does not exist
 	ErrUnknownRetryPolicy = fmt.Errorf("unknown retry policy")
 
+	// ErrUnknownDiscardPolicy indicates a discard policy could not be found matching a name
+	ErrUnknownDiscardPolicy = fmt.Errorf("unknown discard policy")
+
 	// ErrRequestReplyFailed indicates a callout to a remote handler failed due to a timeout, lack of listeners or network error
 	ErrRequestReplyFailed = fmt.Errorf("request-reply callout failed")
 	// ErrRequestReplyNoDeadline indicates a request-reply handler was called without a deadline
