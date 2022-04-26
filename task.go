@@ -45,6 +45,8 @@ var nameToTaskState = map[string]TaskState{
 	string(TaskStateTerminated): TaskStateTerminated,
 	string(TaskStateCompleted):  TaskStateCompleted,
 	string(TaskStateQueueError): TaskStateQueueError,
+
+	"completed": TaskStateCompleted, // backward compat and just general ux
 }
 
 // Task represents a job item that handlers will execute
