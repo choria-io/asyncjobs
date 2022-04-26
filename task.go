@@ -36,6 +36,17 @@ const (
 	TaskStateQueueError TaskState = "queue_error"
 )
 
+var nameToTaskState = map[string]TaskState{
+	string(TaskStateUnknown):    TaskStateUnknown,
+	string(TaskStateNew):        TaskStateNew,
+	string(TaskStateActive):     TaskStateActive,
+	string(TaskStateRetry):      TaskStateRetry,
+	string(TaskStateExpired):    TaskStateExpired,
+	string(TaskStateTerminated): TaskStateTerminated,
+	string(TaskStateCompleted):  TaskStateCompleted,
+	string(TaskStateQueueError): TaskStateQueueError,
+}
+
 // Task represents a job item that handlers will execute
 type Task struct {
 	// ID is a k-sortable unique ID for the task
