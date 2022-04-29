@@ -15,7 +15,7 @@ func main() {
 
 	var err error
 
-	http.HandleFunc("/ping", HelloHandler)
+	http.HandleFunc("/queue", helloHandler)
 
 	runner.Client, err = aj.NewClient(
 		aj.NatsContext("AJC"),
@@ -35,18 +35,44 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8088", nil))
 }
 
-func HelloHandler(w http.ResponseWriter, _ *http.Request) {
+func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 	runner.Execute()
 
-	nfo, err := runner.Client.StorageAdmin().QueueInfo("PING")
-	if err != nil {
-		log.Fatal(err)
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(err.Error()))
-	}
+	switch r.Method {
+	case "GET":
+		w.WriteHeader(http.StatusNotImplemented)
+		w.Write([]byte("NYI - Not Yet Implemented"))
+	case "POST":
+		// Call ParseForm() to parse the raw query and update r.PostForm and r.Form.
+		if err := r.ParseForm(); err != nil {
+			fmt.Printf("ParseForm() err: %v", err)
+			return
+		}
+		fmt.Printf("Post from website! r.PostFrom = %v\n", r.PostForm)
+		name := r.FormValue("name")
+		address := r.FormValue("address")
+		fmt.Printf("Name = %s\n", name)
+		fmt.Printf("Address = %s\n", address)
 
-	fmt.Println(nfo)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(api.MakeQueueInfo(nfo)))
+		if name != "" {
+
+			nfo, err := runner.Client.StorageAdmin().QueueInfo(name)
+			if err != nil {
+				fmt.Printf(err.Error())
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(err.Error()))
+			}
+
+			fmt.Println(nfo)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(api.MakeQueueInfo(nfo)))
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Queue name is not found"))
+		}
+
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+	}
 }
