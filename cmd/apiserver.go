@@ -15,7 +15,7 @@ func main() {
 
 	var err error
 
-	http.HandleFunc("/queue", helloHandler)
+	http.HandleFunc("/queue", queueHandler)
 
 	runner.Client, err = aj.NewClient(
 		aj.NatsContext("AJC"),
@@ -35,7 +35,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8088", nil))
 }
 
-func helloHandler(w http.ResponseWriter, r *http.Request) {
+func queueHandler(w http.ResponseWriter, r *http.Request) {
 
 	runner.Execute()
 
@@ -49,27 +49,23 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("ParseForm() err: %v", err)
 			return
 		}
-		fmt.Printf("Post from website! r.PostFrom = %v\n", r.PostForm)
+
 		name := r.FormValue("name")
-		address := r.FormValue("address")
-		fmt.Printf("Name = %s\n", name)
-		fmt.Printf("Address = %s\n", address)
+		fmt.Printf("Queue name = %s\n", name)
 
 		if name != "" {
-
 			nfo, err := runner.Client.StorageAdmin().QueueInfo(name)
 			if err != nil {
-				fmt.Printf(err.Error())
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(err.Error()))
+				fmt.Printf("Failed to read the queue %s \n", name)
 			}
 
-			fmt.Println(nfo)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(api.MakeQueueInfo(nfo)))
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Queue name is not found"))
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("Queue name is empty"))
 		}
 
 	default:

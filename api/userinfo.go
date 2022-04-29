@@ -14,16 +14,22 @@ type QueueUserInfo struct {
 }
 
 func MakeQueueInfo(q *aj.QueueInfo) string {
-	var i QueueUserInfo
 
-	i.name = q.Name
-	i.entryNum = humanize.Comma(int64(q.Stream.State.Msgs))
-	i.entryBytes = humanize.IBytes(q.Stream.State.Bytes)
+	if q == nil {
+		return ""
+	} else {
 
-	return fmt.Sprintf(`
+		var i QueueUserInfo
+
+		i.name = q.Name
+		i.entryNum = humanize.Comma(int64(q.Stream.State.Msgs))
+		i.entryBytes = humanize.IBytes(q.Stream.State.Bytes)
+
+		return fmt.Sprintf(`
 	Queue Info:
 	Name: %q
 	Entries: %q
 	Total Bytes: %q
 	`, i.name, i.entryNum, i.entryBytes)
+	}
 }
