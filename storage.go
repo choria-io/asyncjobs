@@ -340,7 +340,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 	if len(msg.Data) == 0 {
 		s.log.Debugf("0 byte payload with headers %#v", msg.Header)
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
-		msg.Term() // data is corrupt so we terminate it, no associated job to update
+		msg.Term(nats.Context(ctx)) // data is corrupt so we terminate it, no associated job to update
 		return nil, ErrQueueItemInvalid
 	}
 
@@ -348,7 +348,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 	err = json.Unmarshal(msg.Data, item)
 	if err != nil || item.JobID == "" {
 		workQueueEntryCorruptCounter.WithLabelValues(q.Name).Inc()
-		msg.Term() // data is corrupt so we terminate it, no associated job to update
+		msg.Term(nats.Context(ctx)) // data is corrupt so we terminate it, no associated job to update
 		return nil, ErrQueueItemCorrupt
 	}
 
