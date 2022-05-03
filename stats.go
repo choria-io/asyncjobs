@@ -61,6 +61,11 @@ var (
 		Help: "The number of task updates that failed",
 	}, []string{})
 
+	taskDependenciesFailedCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(prometheusNamespace, "task", "dependencies_failed"),
+		Help: "The number of tasks that failed because their dependencies had errors",
+	}, []string{})
+
 	handlersBusyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "handler", "busy_count"),
 		Help: "The number busy handlers",
@@ -110,6 +115,7 @@ func init() {
 
 	prometheus.MustRegister(taskUpdateCounter)
 	prometheus.MustRegister(taskUpdateErrorCounter)
+	prometheus.MustRegister(taskDependenciesFailedCounter)
 
 	prometheus.MustRegister(handlersBusyGauge)
 	prometheus.MustRegister(handlersErroredCounter)

@@ -373,6 +373,131 @@ var _ = Describe("Processor", func() {
 		})
 	})
 
+	Describe("Dependencies", func() {
+		BeforeEach(func() {
+			defaultBlockedNakTime = 10 * time.Millisecond
+		})
+
+		AfterEach(func() {
+			defaultBlockedNakTime = 5 * time.Second
+		})
+
+		It("Should fail for unresolvable dependencies", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				parent, err := NewTask("ginkgo", "parent")
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test", TaskDependsOn(parent))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				router := NewTaskRouter()
+				go client.Run(ctx, router)
+
+				time.Sleep(50 * time.Millisecond)
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateUnreachable))
+				Expect(task.Tries).To(Equal(0))
+			})
+		})
+
+		It("Should fail for failed dependencies", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				p1, err := NewTask("ginkgo", "parent")
+				Expect(err).ToNot(HaveOccurred())
+				p1.State = TaskStateExpired
+				Expect(client.storage.SaveTaskState(ctx, p1, false)).ToNot(HaveOccurred())
+
+				p2, err := NewTask("ginkgo", "parent")
+				Expect(err).ToNot(HaveOccurred())
+				p2.State = TaskStateCompleted
+				Expect(client.storage.SaveTaskState(ctx, p2, false)).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test", TaskDependsOn(p1, p2))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				router := NewTaskRouter()
+				go client.Run(ctx, router)
+
+				time.Sleep(50 * time.Millisecond)
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateUnreachable))
+				Expect(task.Tries).To(Equal(0))
+			})
+		})
+
+		It("Should run tasks in order", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				p1, err := NewTask("ginkgo", "parent")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, p1)).ToNot(HaveOccurred())
+
+				p2, err := NewTask("ginkgo", "parent")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, p2)).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test", TaskDependsOn(p1, p2), TaskRequiresDependencyResults())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				wg := sync.WaitGroup{}
+				wg.Add(3)
+				mu := sync.Mutex{}
+				var runs []string
+
+				router := NewTaskRouter()
+				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (interface{}, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					defer wg.Done()
+
+					time.Sleep(500 * time.Millisecond)
+
+					runs = append(runs, task.ID)
+
+					if task.HasDependencies() {
+						Expect(task.DependencyResults).To(HaveLen(2))
+					}
+
+					return task.ID, nil
+				})
+
+				go client.Run(ctx, router)
+
+				wg.Wait()
+				time.Sleep(50 * time.Millisecond)
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateCompleted))
+				Expect(runs).To(HaveLen(3))
+				Expect(runs[2]).To(Equal(task.ID))
+			})
+		})
+	})
+
 	Describe("newProcessor", func() {
 		It("Should et up a limiter", func() {
 			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {

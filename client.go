@@ -6,6 +6,7 @@ package asyncjobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -217,7 +218,9 @@ func (c *Client) handleTaskError(ctx context.Context, t *Task, terr error) error
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateRetry
 
-	if t.Queue != "" && t.Queue == c.opts.queue.Name {
+	if errors.Is(terr, ErrTaskDependenciesFailed) {
+		t.State = TaskStateUnreachable
+	} else if t.Queue != "" && t.Queue == c.opts.queue.Name {
 		if c.opts.queue.MaxTries == t.Tries {
 			c.log.Infof("Expiring task %s after %d / %d tries", t.ID, t.Tries, c.opts.queue.MaxTries)
 			t.State = TaskStateExpired

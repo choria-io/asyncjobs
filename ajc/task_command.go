@@ -34,6 +34,8 @@ type taskCommand struct {
 	remote          bool
 	discardComplete bool
 	discardExpired  bool
+	dependencies    []string
+	loadDepResults  bool
 
 	limit int
 	json  bool
@@ -51,12 +53,14 @@ func configureTaskCommand(app *kingpin.Application) {
 	add.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
 	add.Flag("deadline", "A duration to determine when the latest time that a task handler will be called").DurationVar(&c.deadline)
 	add.Flag("tries", "Sets the maximum amount of times this task may be tried").IntVar(&c.maxtries)
+	add.Flag("depends", "Sets IDs to depend on, comma sep or pass multiple times").StringsVar(&c.dependencies)
+	add.Flag("load", "Loads results from dependencies before executing task").BoolVar(&c.loadDepResults)
 
 	retry := tasks.Command("retry", "Retries delivery of a task currently in the Task Store").Action(c.retryAction)
 	retry.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
 	retry.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
 
-	view := tasks.Command("view", "Views the status of a Task").Alias("show").Alias("v").Action(c.viewAction)
+	view := tasks.Command("view", "Views the status of a Task").Alias("show").Alias("v").Alias("info").Alias("i").Action(c.viewAction)
 	view.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
 	view.Flag("json", "Show JSON data").Short('j').BoolVar(&c.json)
 
@@ -353,6 +357,10 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	fmt.Printf("            Task Type: %s\n", task.Type)
 	fmt.Printf("              Payload: %s\n", humanize.IBytes(uint64(len(task.Payload))))
 	fmt.Printf("               Status: %s\n", task.State)
+	if task.HasDependencies() {
+		fmt.Printf("         Dependencies: %v\n", strings.Join(task.Dependencies, ", "))
+		fmt.Printf("     Load Dep Results: %t\n", task.LoadDependencies)
+	}
 	if task.Result != nil {
 		fmt.Printf("            Completed: %s (%s)\n", task.Result.CompletedAt.Format(timeFormat), humanizeDuration(task.Result.CompletedAt.Sub(task.CreatedAt)))
 	} else {
@@ -386,6 +394,18 @@ func (c *taskCommand) addAction(_ *kingpin.ParseContext) error {
 	var opts []aj.TaskOpt
 	if c.deadline > 0 {
 		opts = append(opts, aj.TaskDeadline(time.Now().UTC().Add(c.deadline)))
+	}
+
+	if len(c.dependencies) > 0 {
+		for _, deps := range c.dependencies {
+			for _, dep := range strings.Split(deps, ",") {
+				opts = append(opts, aj.TaskDependsOnIDs(strings.TrimSpace(dep)))
+			}
+		}
+
+		if c.loadDepResults {
+			opts = append(opts, aj.TaskRequiresDependencyResults())
+		}
 	}
 
 	if c.maxtries > 0 {

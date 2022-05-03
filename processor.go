@@ -65,6 +65,73 @@ func newProcessor(c *Client) (*processor, error) {
 	return p, nil
 }
 
+func (p *processor) loadDependencies(task *Task) (bool, bool, error) {
+	ready := true
+
+	for _, parent := range task.Dependencies {
+		pt, err := p.c.LoadTaskByID(parent)
+		if errors.Is(err, ErrTaskNotFound) {
+			return false, true, fmt.Errorf("%w: %s", ErrTaskNotFound, parent)
+		} else if err != nil {
+			return false, false, fmt.Errorf("%s: %s: %v", ErrTaskLoadFailed, parent, err)
+		}
+
+		switch pt.State {
+		case TaskStateCompleted:
+		case TaskStateExpired, TaskStateTerminated, TaskStateQueueError, TaskStateUnknown:
+			return false, true, nil
+		default:
+			ready = false
+			continue
+		}
+
+		if task.LoadDependencies {
+			if len(task.DependencyResults) == 0 {
+				task.DependencyResults = make(map[string]*TaskResult)
+			}
+			task.DependencyResults[pt.ID] = pt.Result
+		}
+	}
+
+	return ready, false, nil
+}
+
+func (p *processor) processDependencies(ctx context.Context, item *ProcessItem, task *Task) (bool, error) {
+	ready, failed, err := p.loadDependencies(task)
+	if err != nil {
+		if failed {
+			p.log.Warnf("Could not process dependencies for task %s, terminating task: %v", task.ID, err)
+			taskDependenciesFailedCounter.WithLabelValues().Inc()
+			p.c.storage.TerminateItem(ctx, item)
+			p.c.handleTaskError(ctx, task, fmt.Errorf("%w: %v", ErrTaskDependenciesFailed, err))
+		} else {
+			p.log.Warnf("Could not process dependencies for task %s, will retry: %v", task.ID, err)
+			err = p.c.storage.NakBlockedItem(ctx, item)
+			if err != nil {
+				p.log.Warnf("NaK blocked item failed: %v", err)
+			}
+		}
+
+		return false, err
+	}
+
+	if failed {
+		p.c.storage.TerminateItem(ctx, item)
+		p.c.handleTaskError(ctx, task, fmt.Errorf("%w: %v", ErrTaskDependenciesFailed, err))
+		return false, ErrTaskDependenciesFailed
+	}
+
+	if !ready {
+		err = p.c.storage.NakBlockedItem(ctx, item)
+		if err != nil {
+			p.log.Warnf("NaK of blocked item failed: %v", err)
+		}
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error {
 	task, err := p.c.LoadTaskByID(item.JobID)
 	if err != nil {
@@ -83,6 +150,10 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		if task.LastTriedAt == nil || time.Since(*task.LastTriedAt) < p.queue.MaxRunTime {
 			return ErrTaskAlreadyActive
 		}
+
+	case TaskStateUnreachable:
+		p.c.storage.AckItem(ctx, item)
+		return ErrTaskDependenciesFailed
 
 	case TaskStateCompleted, TaskStateExpired:
 		p.c.storage.AckItem(ctx, item)
@@ -105,6 +176,19 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 			p.log.Warnf("Could not expire task %s: %v", task.ID, err)
 		}
 		return ErrTaskExceedsMaxTries
+	}
+
+	if task.State == TaskStateBlocked && task.HasDependencies() {
+		should, err := p.processDependencies(ctx, item, task)
+		if err != nil {
+			if errors.Is(err, ErrTaskDependenciesFailed) {
+				return err
+			}
+		}
+		if !should {
+			p.limiter <- struct{}{} // todo handle this in a better place
+			return nil
+		}
 	}
 
 	err = p.c.setTaskActive(ctx, task)

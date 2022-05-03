@@ -28,8 +28,8 @@ type RetryPolicyProvider interface {
 }
 
 var (
-	// RetryLinearTenMinutes is a 20-step policy between 1 and 10 minutes
-	RetryLinearTenMinutes = linearPolicy(20, 0.90, time.Minute, 10*time.Minute)
+	// RetryLinearTenMinutes is a 50-step policy between 1 and 10 minutes
+	RetryLinearTenMinutes = linearPolicy(50, 0.90, time.Minute, 10*time.Minute)
 
 	// RetryLinearOneHour is a 50-step policy between 10 minutes and 1 hour
 	RetryLinearOneHour = linearPolicy(20, 0.90, 10*time.Minute, 60*time.Minute)

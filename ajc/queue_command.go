@@ -37,7 +37,7 @@ func configureQueueCommand(app *kingpin.Application) {
 	add.Arg("queue", "Queue to Configure").Required().StringVar(&c.name)
 	add.Flag("age", "Sets the maximum age for entries to keep, 0s for unlimited").Default("0s").DurationVar(&c.maxAge)
 	add.Flag("entries", "Sets the maximum amount of entries to keep, 0 for unlimited").Default("0").IntVar(&c.maxEntries)
-	add.Flag("tries", "Maximum delivery attempts to allow per message, -1 for unlimited").Default(fmt.Sprintf("%d", asyncjobs.DefaultMaxTries)).IntVar(&c.maxTries)
+	add.Flag("tries", "Maximum delivery attempts to allow per message, -1 for unlimited").Default("-1").IntVar(&c.maxTries)
 	add.Flag("run-time", "Maximum run-time to allow per task").Default(asyncjobs.DefaultJobRunTime.String()).DurationVar(&c.maxTime)
 	add.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default(fmt.Sprintf("%d", asyncjobs.DefaultQueueMaxConcurrent)).IntVar(&c.maxConcurrent)
 	add.Flag("memory", "Store the Queue in memory").BoolVar(&c.memory)
@@ -68,7 +68,7 @@ func configureQueueCommand(app *kingpin.Application) {
 }
 
 func (c *queueCommand) addAction(_ *kingpin.ParseContext) error {
-	err := prepare()
+	err := prepare(asyncjobs.NoStorageInit())
 	if err != nil {
 		return err
 	}
