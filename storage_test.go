@@ -379,7 +379,7 @@ var _ = Describe("Storage", func() {
 				err := storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(q.MaxTries).To(Equal(DefaultMaxTries))
+				Expect(q.MaxTries).To(Equal(-1))
 				Expect(q.MaxRunTime).To(Equal(DefaultJobRunTime))
 				Expect(q.MaxConcurrent).To(Equal(DefaultQueueMaxConcurrent))
 			})

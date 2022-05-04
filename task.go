@@ -34,19 +34,25 @@ const (
 	TaskStateCompleted TaskState = "complete"
 	// TaskStateQueueError tasks that could not have their associated Work Queue item created
 	TaskStateQueueError TaskState = "queue_error"
+	// TaskStateBlocked tasks that are waiting on dependencies
+	TaskStateBlocked TaskState = "blocked"
+	// TaskStateUnreachable tasks that could not be run due to dependency problems
+	TaskStateUnreachable TaskState = "unreachable"
 )
 
 var nameToTaskState = map[string]TaskState{
-	string(TaskStateUnknown):    TaskStateUnknown,
-	string(TaskStateNew):        TaskStateNew,
-	string(TaskStateActive):     TaskStateActive,
-	string(TaskStateRetry):      TaskStateRetry,
-	string(TaskStateExpired):    TaskStateExpired,
-	string(TaskStateTerminated): TaskStateTerminated,
-	string(TaskStateCompleted):  TaskStateCompleted,
-	string(TaskStateQueueError): TaskStateQueueError,
+	string(TaskStateUnknown):     TaskStateUnknown,
+	string(TaskStateNew):         TaskStateNew,
+	string(TaskStateActive):      TaskStateActive,
+	string(TaskStateRetry):       TaskStateRetry,
+	string(TaskStateExpired):     TaskStateExpired,
+	string(TaskStateTerminated):  TaskStateTerminated,
+	string(TaskStateCompleted):   TaskStateCompleted,
+	string(TaskStateQueueError):  TaskStateQueueError,
+	string(TaskStateBlocked):     TaskStateBlocked,
+	string(TaskStateUnreachable): TaskStateUnreachable,
 
-	"completed": TaskStateCompleted, // backward compat and just general ux
+	"completed": TaskStateCompleted, // backward compat and just general UX
 }
 
 // Task represents a job item that handlers will execute
@@ -57,6 +63,12 @@ type Task struct {
 	Type string `json:"type"`
 	// Queue is the name of the queue the task was enqueued with, set only during the enqueue operation else empty
 	Queue string `json:"queue"`
+	// Dependencies are IDs of tasks that should complete before this one becomes unblocked
+	Dependencies []string `json:"dependencies,omitempty"`
+	// DependentResults are results for dependent tasks
+	DependencyResults map[string]*TaskResult `json:"dependency_results,omitempty"`
+	// LoadDependencies indicates if this task should load dependency results before execting
+	LoadDependencies bool `json:"load_dependencies,omitempty"`
 	// Payload is a JSON representation of the associated work
 	Payload []byte `json:"payload"`
 	// Deadline is a cut-off time for the job to complete, should a job be scheduled after this time it will fail.
@@ -116,6 +128,7 @@ func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, erro
 		ID:        id.String(),
 		Type:      taskType,
 		CreatedAt: time.Now().UTC(),
+		MaxTries:  DefaultMaxTries,
 		State:     TaskStateNew,
 	}
 
@@ -134,12 +147,21 @@ func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, erro
 		}
 	}
 
+	if len(t.Dependencies) > 0 {
+		t.State = TaskStateBlocked
+	}
+
 	return t, nil
 }
 
 // IsPastDeadline determines if the task is past it's deadline
 func (t *Task) IsPastDeadline() bool {
 	return t.Deadline != nil && time.Since(*t.Deadline) > 0
+}
+
+// HasDependencies determines if the task has any dependencies
+func (t *Task) HasDependencies() bool {
+	return len(t.Dependencies) > 0
 }
 
 // TaskOpt configures Tasks made using NewTask()
@@ -158,6 +180,52 @@ func TaskDeadline(deadline time.Time) TaskOpt {
 func TaskMaxTries(tries int) TaskOpt {
 	return func(t *Task) error {
 		t.MaxTries = tries
+		return nil
+	}
+}
+
+// TaskDependsOnIDs are IDs that this task is dependent on, can be called multiple times
+func TaskDependsOnIDs(ids ...string) TaskOpt {
+	return func(t *Task) error {
+		var should bool
+
+		for _, id := range ids {
+			should = true
+
+			for _, d := range t.Dependencies {
+				if d == id {
+					should = false
+					break
+				}
+			}
+
+			if should {
+				t.Dependencies = append(t.Dependencies, id)
+			}
+		}
+
+		return nil
+	}
+}
+
+// TaskDependsOn are Tasks that this task is dependent on, can be called multiple times
+func TaskDependsOn(tasks ...*Task) TaskOpt {
+	return func(t *Task) error {
+		for _, task := range tasks {
+			err := TaskDependsOnIDs(task.ID)(t)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
+
+// TaskRequiresDependencyResults indicates that if a task has any dependencies their results should be loaded before execution
+func TaskRequiresDependencyResults() TaskOpt {
+	return func(t *Task) error {
+		t.LoadDependencies = true
 		return nil
 	}
 }

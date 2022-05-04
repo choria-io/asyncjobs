@@ -34,6 +34,8 @@ var (
 	ErrTaskTypeRequired = fmt.Errorf("task type is required")
 	// ErrTaskTypeInvalid indicates an invalid task type was given
 	ErrTaskTypeInvalid = fmt.Errorf("task type is invalid")
+	// ErrTaskDependenciesFailed indicates that the task cannot be run as its dependencies failed
+	ErrTaskDependenciesFailed = fmt.Errorf("task dependencies failed")
 
 	// ErrNoHandlerForTaskType indicates that a task could not be handled by any known handlers
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")

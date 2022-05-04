@@ -18,7 +18,7 @@ const (
 	ShortedScheduledDeadline = 30 * time.Second
 	// DefaultJobRunTime when not configured for a queue this is the default run-time handlers will get
 	DefaultJobRunTime = time.Hour
-	// DefaultMaxTries when not configured for a queue this is the default tries it will get
+	// DefaultMaxTries when not configured for a task this is the default tries it will get
 	DefaultMaxTries = 10
 	// DefaultQueueMaxConcurrent when not configured for a queue this is the default concurrency setting
 	DefaultQueueMaxConcurrent = 100
@@ -63,6 +63,7 @@ type Storage interface {
 	DeleteTaskByID(id string) error
 	PublishTaskStateChangeEvent(ctx context.Context, task *Task) error
 	AckItem(ctx context.Context, item *ProcessItem) error
+	NakBlockedItem(ctx context.Context, item *ProcessItem) error
 	NakItem(ctx context.Context, item *ProcessItem) error
 	TerminateItem(ctx context.Context, item *ProcessItem) error
 	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)

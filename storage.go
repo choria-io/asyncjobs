@@ -60,6 +60,9 @@ const (
 	LeaderElectionBucketName = "CHORIA_AJ_ELECTIONS"
 )
 
+// for tests
+var defaultBlockedNakTime = 5 * time.Second
+
 type jetStreamStorage struct {
 	nc  *nats.Conn
 	mgr *jsm.Manager
@@ -198,7 +201,7 @@ func (s *jetStreamStorage) RetryTaskByID(ctx context.Context, queue *Queue, id s
 }
 
 func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *Task) error {
-	if task.State != TaskStateNew && task.State != TaskStateRetry {
+	if task.State != TaskStateNew && task.State != TaskStateRetry && task.State != TaskStateBlocked {
 		return fmt.Errorf("%w %q", ErrTaskTypeCannotEnqueue, task.State)
 	}
 
@@ -278,6 +281,24 @@ func (s *jetStreamStorage) TerminateItem(ctx context.Context, item *ProcessItem)
 	return item.storageMeta.(*nats.Msg).Term(nats.Context(ctx))
 }
 
+func (s *jetStreamStorage) NakBlockedItem(ctx context.Context, item *ProcessItem) error {
+	if item.storageMeta == nil {
+		return ErrInvalidStorageItem
+	}
+
+	msg := item.storageMeta.(*nats.Msg)
+
+	timeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	s.log.Debugf("NaKing blocked item with 5s delay")
+
+	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, defaultBlockedNakTime)
+	_, err := s.nc.RequestWithContext(timeout, msg.Reply, []byte(resp))
+
+	return err
+}
+
 func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error {
 	if item.storageMeta == nil {
 		return ErrInvalidStorageItem
@@ -302,6 +323,7 @@ func (s *jetStreamStorage) NakItem(ctx context.Context, item *ProcessItem) error
 
 	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next)
 	_, err = s.nc.RequestWithContext(timeout, msg.Reply, []byte(resp))
+
 	return err
 }
 
@@ -357,7 +379,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 
 func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) error {
 	if q.MaxTries == 0 {
-		q.MaxTries = DefaultMaxTries
+		q.MaxTries = -1
 	}
 
 	if q.MaxRunTime == 0 {
