@@ -76,7 +76,7 @@ See our [Wiki](https://github.com/choria-io/asyncjobs/wiki) for a deep dive into
 
 ## Requirements
 
-NATS 2.7.2 with JetStream enabled.
+NATS 2.8.0 or newer with JetStream enabled.
 
 ## Features
 
