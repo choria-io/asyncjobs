@@ -33,3 +33,10 @@ func (l *defaultLogger) Errorf(format string, v ...interface{}) {
 func (l *defaultLogger) Debugf(format string, v ...interface{}) {
 	log.Printf(format, v...)
 }
+
+type emptyLogger struct{}
+
+func (l *emptyLogger) Infof(format string, v ...interface{})  {}
+func (l *emptyLogger) Warnf(format string, v ...interface{})  {}
+func (l *emptyLogger) Errorf(format string, v ...interface{}) {}
+func (l *emptyLogger) Debugf(format string, v ...interface{}) {}
