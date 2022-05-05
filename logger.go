@@ -16,6 +16,7 @@ type Logger interface {
 	Errorf(format string, v ...interface{})
 }
 
+// Default console logger
 type defaultLogger struct{}
 
 func (l *defaultLogger) Infof(format string, v ...interface{}) {
@@ -34,9 +35,10 @@ func (l *defaultLogger) Debugf(format string, v ...interface{}) {
 	log.Printf(format, v...)
 }
 
-type emptyLogger struct{}
+// Logger placeholder
+type noopLogger struct{}
 
-func (l *emptyLogger) Infof(format string, v ...interface{})  {}
-func (l *emptyLogger) Warnf(format string, v ...interface{})  {}
-func (l *emptyLogger) Errorf(format string, v ...interface{}) {}
-func (l *emptyLogger) Debugf(format string, v ...interface{}) {}
+func (l *noopLogger) Infof(format string, v ...interface{})  {}
+func (l *noopLogger) Warnf(format string, v ...interface{})  {}
+func (l *noopLogger) Errorf(format string, v ...interface{}) {}
+func (l *noopLogger) Debugf(format string, v ...interface{}) {}

@@ -30,7 +30,7 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 		replicas:    1,
 		concurrency: 10,
 		retryPolicy: RetryDefault,
-		logger:      &emptyLogger{},
+		logger:      &noopLogger{},
 	}
 
 	var err error
