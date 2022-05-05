@@ -510,6 +510,10 @@ func (s *jetStreamStorage) ConfigurationInfo() (*nats.KeyValueBucketStatus, erro
 }
 
 func (s *jetStreamStorage) TasksInfo() (*TasksInfo, error) {
+	if s.tasks == nil || s.tasks.stream == nil {
+		return nil, fmt.Errorf("%w: task store not initialized", ErrStorageNotReady)
+	}
+
 	res := &TasksInfo{
 		Time: time.Now().UTC(),
 	}
@@ -524,6 +528,10 @@ func (s *jetStreamStorage) TasksInfo() (*TasksInfo, error) {
 }
 
 func (s *jetStreamStorage) DeleteTaskByID(id string) error {
+	if s.tasks == nil || s.tasks.stream == nil {
+		return fmt.Errorf("%w: task store not initialized", ErrStorageNotReady)
+	}
+
 	msg, err := s.tasks.stream.ReadLastMessageForSubject(fmt.Sprintf(TasksStreamSubjectPattern, id))
 	if err != nil {
 		if jsm.IsNatsError(err, 10037) {
@@ -536,6 +544,10 @@ func (s *jetStreamStorage) DeleteTaskByID(id string) error {
 }
 
 func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
+	if s.tasks == nil || s.tasks.stream == nil {
+		return nil, fmt.Errorf("%w: task store not initialized", ErrStorageNotReady)
+	}
+
 	msg, err := s.tasks.stream.ReadLastMessageForSubject(fmt.Sprintf(TasksStreamSubjectPattern, id))
 	if err != nil {
 		if jsm.IsNatsError(err, 10037) {
@@ -904,6 +916,10 @@ func (s *jetStreamStorage) ElectionStorage() (nats.KeyValue, error) {
 }
 
 func (s *jetStreamStorage) Tasks(ctx context.Context, limit int32) (chan *Task, error) {
+	if s.tasks == nil || s.tasks.stream == nil {
+		return nil, fmt.Errorf("%w: task store not initialized", ErrStorageNotReady)
+	}
+
 	nfo, err := s.tasks.stream.State()
 	if err != nil {
 		return nil, err
