@@ -13,7 +13,7 @@
   --CODE-INLINE-color: #5e5e5e; /* text color of inline code */
   --CODE-INLINE-BG-color: #fff7dd; /* background color of inline code */
   --CODE-INLINE-BORDER-color: #fbf0cb; /* border color of inline code */
-  --MENU-HEADER-BG-color: #29395B; /* background color of menu header */
+  --MENU-HEADER-BG-color: #666666; /* background color of menu header */
   --MENU-HEADER-BORDER-color: #67C287; /* separator color of menu header */
   --MENU-HOME-LINK-color: #29395B; /* home button color if configured */
   --MENU-HOME-LINK-HOVER-color: #29395B; /* hoverd home button color if configured */

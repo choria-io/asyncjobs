@@ -11,7 +11,7 @@ home = [ "HTML", "RSS", "JSON"]
 author = "Choria Project"
 showVisitedLinks = false
 disableLanguageSwitchingButton = true
-themeVariant = ["relearn-light", "relearn-dark", "asyncjobs"]
+themeVariant = "asyncjobs"
 disableInlineCopyToClipBoard = true
 alwaysopen = true
 
