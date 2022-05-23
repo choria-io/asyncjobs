@@ -11,9 +11,17 @@ home = [ "HTML", "RSS", "JSON"]
 author = "Choria Project"
 showVisitedLinks = false
 disableLanguageSwitchingButton = true
-themeVariant = "asyncjobs"
+themeVariant = ["relearn-light", "relearn-dark", "asyncjobs"]
 disableInlineCopyToClipBoard = true
 alwaysopen = true
+
+[markup]
+  [markup.highlight]
+    # if set to `guessSyntax = true`, there will be no unstyled code even if no language
+    # was given BUT mermaid code fences will not work anymore! So this is a mandatory
+    # setting for your site
+    guessSyntax = false
+
 
 [[menu.shortcuts]]
 name = "<i class='fab fa-fw fa-github'></i> GitHub"
