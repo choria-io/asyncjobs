@@ -15,13 +15,11 @@ NATS Request-Reply services. Per process concurrency and overall per-queue concu
 
 This package heavily inspired by [hibiken/asynq](https://github.com/hibiken/asynq/).
 
- * [Status](#status)
- * [Features](#features)
- * [Wiki](https://github.com/choria-io/asyncjobs/wiki)
+ * [Documentation](https://choria-io.github.io/asyncjobs/)
  * [Community](https://github.com/choria-io/asyncjobs/discussions)
  * Examples
-   * [Golang](https://github.com/choria-io/asyncjobs/wiki/Introductory-Golang-Walkthrough)
-   * [CLI](https://github.com/choria-io/asyncjobs/wiki/Introductory-CLI-Walkthrough)
+   * [Golang](https://choria-io.github.io/asyncjobs/overview/golang-overview/)
+   * [CLI](https://choria-io.github.io/asyncjobs/overview/cli-overview/)
  
  [![Go Reference](https://pkg.go.dev/badge/github.com/choria-io/asyncjobs.svg)](https://pkg.go.dev/github.com/choria-io/asyncjobs)
  [![Go Report Card](https://goreportcard.com/badge/github.com/choria-io/asyncjobs)](https://goreportcard.com/report/github.com/choria-io/asyncjobs) 
@@ -72,7 +70,7 @@ router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task
 client.Run(ctx, router)
 ```
 
-See our [Wiki](https://github.com/choria-io/asyncjobs/wiki) for a deep dive into the use cases, architecture, abilities and more.
+See our [documentation](https://choria-io.github.io/asyncjobs/) for a deep dive into the use cases, architecture, abilities and more.
 
 ## Requirements
 
@@ -80,4 +78,4 @@ NATS 2.8.0 or newer with JetStream enabled.
 
 ## Features
 
-See the [Feature List](https://github.com/choria-io/asyncjobs/wiki/Features) page for a full feature break down.
+See the [Feature List](https://choria-io.github.io/asyncjobs/overview/features/) page for a full feature break down.

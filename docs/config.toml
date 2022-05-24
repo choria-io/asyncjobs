@@ -21,7 +21,7 @@ alwaysopen = true
     # was given BUT mermaid code fences will not work anymore! So this is a mandatory
     # setting for your site
     guessSyntax = false
-
+    style = "tango"
 
 [[menu.shortcuts]]
 name = "<i class='fab fa-fw fa-github'></i> GitHub"

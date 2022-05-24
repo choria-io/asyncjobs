@@ -3,79 +3,50 @@ title = "Choria Async Jobs"
 weight = 5
 +++
 
-## Overview
+# Introduction
 
-`asyncjobs` provide a [JetStream](https://docs.nats.io/jetstream) backed Asynchronous Job Processing system in Go.
+This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management. It is compatible with any NATS JetStream based system like a private hosted JetStream, Choria Streams or a commercial SaaS.
 
-Use it to schedule and run jobs in a distributed cluster of workers.  Workers can be written in any language and scales
-horizontally and vertically.
+Each Task is stored in JetStream by a unique ID and Work Queue item is made referencing that Task. JetStream will handle dealing with scheduling, retries, acknowledgements and more of the Work Queue item. The stored Task will be updated during the lifecycle.
 
-You can think of it like a distributed share-nothing cron.
+Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable. Job handlers are implemented in Go with one process hosting one or many handlers. Other languages can implement Job Handlers using NATS Request-Reply services. Per process concurrency and overall per-queue concurrency controls exist.
 
-## Features
+## Synopsis
 
-This feature list is incomplete, at present the focus is on determining what will work well for the particular patterns
-JetStream enables, so there might be some churn in the feature set here.
+Tasks are published to Work Queues:
 
-### Tasks
+```go
+// establish a connection to the EMAIL work queue using a NATS context
+client, _ := asyncjobs.NewClient(asyncjobs.NatsConn(nc), asyncjobs.BindWorkQueue("EMAIL"))
 
-* Task definitions stored post-processing, with various retention and discard policies
-* Ability to retry a Task that has already been completed or failed
-* Task deduplication
-* Deadline per task - after this time the task will not be processed
-* Tasks can depend on other tasks
-* Max tries per task, capped to the queue tries
-* Task state tracked throughout it's lifecycle
-* [K-Sortable](https://github.com/segmentio/ksuid) Task GUIDs
-* Lifecycle events published about [changes to task states](Lifecycle-Events)
+// create a task with the type 'email:new' and body from newEmail()
+task, _ := asyncjobs.NewTask("email:new", newEmail())
 
-See [Task Lifecycle](https://github.com/choria-io/asyncjobs/wiki/Task-Lifecycle) for full background and details
+// store it in the Work Queue
+client.EnqueueTask(ctx, task)
+```
 
-### Queues
+Tasks are processes by horizontally and vertically scalable processes. Typically, a Handler handles one type of Task. We have Prometheus
+integration, concurrency and backoffs configured.
 
-* Queues can store different types of task
-* Queues with caps on queued items and different queue-full behaviors
-* Default or user supplied queue definitions
-* Queue per client, many clients per queue
+```go
+// establish a connection to the EMAIL work queue using a 
+// NATS context, with concurrency, prometheus stats and backoff
+client, _ := asyncjobs.NewClient(
+	asyncjobs.NatsContext("EMAIL"), 
+	asyncjobs.BindWorkQueue("EMAIL"),
+	asyncjobs.ClientConcurrency(10),
+	asyncjobs.PrometheusListenPort(8080),
+	asyncjobs.RetryBackoffPolicy(asyncjobs.RetryLinearTenMinutes))
 
-### Processing
+router := asyncjobs.NewTaskRouter()
+router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+	log.Printf("Processing task %s", task.ID)
 
-* Retries of failed tasks with backoff schedules configurable using `RetryBackoffPolicy()`. Handler opt-in early termination.
-* Parallel processing of tasks, horizontally or vertically scaled. Run time adjustable upper boundary on a per-queue basis
-* Worker crashes does not impact the work queue
-* Handler interface with task router to select appropriate handler by task type with wildcard matches
-* Support for Handlers in all NATS Supported languages using [Remote Handlers](Remote-Request-Reply-Handlers)
-* Statistics via Prometheus
+	// do work here using task.Payload
 
-### Storage
+	return "sent", nil
+})
 
-* Replicated storage using RAFT protocol within JetStream Streams, disk based or memory based
-* KV for configuration and schedule storage
-* KV for leader elections
-
-### Scheduled Tasks
-
-* Cron like schedules creating tasks on demand
-* HA capable Scheduler process integrated with `ajc`
-* Prometheus monitoring
-* CLI CRUD operations via `ajc task cron`
-
-See [Scheduled Tasks](Scheduled-Tasks)
-
-### Misc
-
-* Supports NATS Contexts for connection configuration
-* Supports custom loggers, defaulting to go internal `log`
-
-### Command Line
-
-* Various info and state requests
-* Configure aspects of Task and Queue storage
-* Watch task processing
-* Process tasks via shell commands
-* CRUD on Tasks store or individual Task
-* CRUD on Scheduled Tasks
-
-## Planned Features
-
-A number of features are planned in the near term, see our [GitHub Issues](https://github.com/choria-io/asyncjobs/labels/enhancement)
+client.Run(ctx, router)
+```
