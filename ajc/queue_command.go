@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/choria-io/asyncjobs"
+	"github.com/choria-io/fisk"
 	"github.com/dustin/go-humanize"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type queueCommand struct {
@@ -28,7 +28,7 @@ type queueCommand struct {
 	discardOld    bool
 }
 
-func configureQueueCommand(app *kingpin.Application) {
+func configureQueueCommand(app *fisk.Application) {
 	c := &queueCommand{}
 
 	queues := app.Command("queues", "Manage Work Queues").Alias("q").Alias("queue")
@@ -67,7 +67,7 @@ func configureQueueCommand(app *kingpin.Application) {
 	cfg.Flag("replicas", "Number of storage replicas to configure").Default("-1").IntVar(&c.replicas)
 }
 
-func (c *queueCommand) addAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) addAction(_ *fisk.ParseContext) error {
 	err := prepare(asyncjobs.NoStorageInit())
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func (c *queueCommand) addAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *queueCommand) configureAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) configureAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func (c *queueCommand) configureAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *queueCommand) viewAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) viewAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func (c *queueCommand) viewAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *queueCommand) purgeAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) purgeAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -217,7 +217,7 @@ func (c *queueCommand) purgeAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *queueCommand) rmAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) rmAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func (c *queueCommand) rmAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *queueCommand) lsAction(_ *kingpin.ParseContext) error {
+func (c *queueCommand) lsAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err

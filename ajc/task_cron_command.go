@@ -13,8 +13,8 @@ import (
 	"time"
 
 	aj "github.com/choria-io/asyncjobs"
+	"github.com/choria-io/fisk"
 	"github.com/dustin/go-humanize"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type taskCronCommand struct {
@@ -32,7 +32,7 @@ type taskCronCommand struct {
 	json  bool
 }
 
-func configureTaskCronCommand(app *kingpin.CmdClause) {
+func configureTaskCronCommand(app *fisk.CmdClause) {
 	c := &taskCronCommand{}
 
 	cron := app.Command("cron", "Tasks Scheduler Management and Scheduler").Alias("c")
@@ -62,7 +62,7 @@ func configureTaskCronCommand(app *kingpin.CmdClause) {
 	scheduler.Flag("monitor", "Runs monitoring on the given port").PlaceHolder("AJC_MONITOR").IntVar(&c.promPort)
 }
 
-func (c *taskCronCommand) schedulerAction(_ *kingpin.ParseContext) error {
+func (c *taskCronCommand) schedulerAction(_ *fisk.ParseContext) error {
 	err := prepare(aj.PrometheusListenPort(c.promPort))
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (c *taskCronCommand) schedulerAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCronCommand) lsAction(_ *kingpin.ParseContext) error {
+func (c *taskCronCommand) lsAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (c *taskCronCommand) lsAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCronCommand) rmAction(_ *kingpin.ParseContext) error {
+func (c *taskCronCommand) rmAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func (c *taskCronCommand) rmAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCronCommand) viewAction(_ *kingpin.ParseContext) error {
+func (c *taskCronCommand) viewAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func (c *taskCronCommand) showSchedule(s *aj.ScheduledTask) {
 	}
 }
 
-func (c *taskCronCommand) addAction(_ *kingpin.ParseContext) error {
+func (c *taskCronCommand) addAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err

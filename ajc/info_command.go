@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/choria-io/asyncjobs"
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/choria-io/fisk"
 )
 
 type infoCommand struct {
@@ -18,7 +18,7 @@ type infoCommand struct {
 	retention time.Duration
 }
 
-func configureInfoCommand(app *kingpin.Application) {
+func configureInfoCommand(app *fisk.Application) {
 	c := &infoCommand{}
 
 	info := app.Command("info", "Shows general Task and Queue information").Action(c.infoAction)
@@ -27,7 +27,7 @@ func configureInfoCommand(app *kingpin.Application) {
 	info.Flag("retention", "When initializing, sets how long Tasks are kept").DurationVar(&c.retention)
 }
 
-func (c *infoCommand) infoAction(_ *kingpin.ParseContext) error {
+func (c *infoCommand) infoAction(_ *fisk.ParseContext) error {
 	err := prepare(asyncjobs.MemoryStorage(), asyncjobs.StoreReplicas(c.replicas), asyncjobs.TaskRetention(c.retention))
 	if err != nil {
 		return err

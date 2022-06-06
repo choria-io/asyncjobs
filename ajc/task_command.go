@@ -11,10 +11,10 @@ import (
 	"time"
 
 	aj "github.com/choria-io/asyncjobs"
+	"github.com/choria-io/fisk"
 	"github.com/dustin/go-humanize"
 	"github.com/nats-io/jsm.go"
 	"github.com/xlab/tablewriter"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type taskCommand struct {
@@ -42,7 +42,7 @@ type taskCommand struct {
 	force bool
 }
 
-func configureTaskCommand(app *kingpin.Application) {
+func configureTaskCommand(app *fisk.Application) {
 	c := &taskCommand{}
 
 	tasks := app.Command("tasks", "Manage Tasks").Alias("t").Alias("task")
@@ -101,7 +101,7 @@ func configureTaskCommand(app *kingpin.Application) {
 	configureTaskCronCommand(tasks)
 }
 
-func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) retryAction(_ *fisk.ParseContext) error {
 	err := prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (c *taskCommand) retryAction(_ *kingpin.ParseContext) error {
 	return c.viewAction(nil)
 }
 
-func (c *taskCommand) initAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) initAction(_ *fisk.ParseContext) error {
 	err := prepare(aj.NoStorageInit())
 	if err != nil {
 		return err
@@ -136,7 +136,7 @@ func (c *taskCommand) initAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) watchAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -182,7 +182,7 @@ func (c *taskCommand) watchAction(_ *kingpin.ParseContext) error {
 	}
 }
 
-func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) processAction(_ *fisk.ParseContext) error {
 	if c.command == "" && !c.remote {
 		return fmt.Errorf("either a command or --remote is required")
 	}
@@ -218,7 +218,7 @@ func (c *taskCommand) processAction(_ *kingpin.ParseContext) error {
 	return client.Run(context.Background(), router)
 }
 
-func (c *taskCommand) purgeAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) purgeAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func (c *taskCommand) purgeAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) configAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) configAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func (c *taskCommand) configAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) lsAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) lsAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -314,7 +314,7 @@ func (c *taskCommand) lsAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) rmAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) rmAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -337,7 +337,7 @@ func (c *taskCommand) rmAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) viewAction(_ *fisk.ParseContext) error {
 	err := prepare()
 	if err != nil {
 		return err
@@ -385,7 +385,7 @@ func (c *taskCommand) viewAction(_ *kingpin.ParseContext) error {
 	return nil
 }
 
-func (c *taskCommand) addAction(_ *kingpin.ParseContext) error {
+func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
 	err := prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err

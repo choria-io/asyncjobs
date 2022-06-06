@@ -12,15 +12,15 @@ import (
 
 	"github.com/choria-io/asyncjobs"
 	"github.com/choria-io/asyncjobs/generators"
-	"gopkg.in/alecthomas/kingpin.v2"
-	"gopkg.in/yaml.v2"
+	"github.com/choria-io/fisk"
+	"gopkg.in/yaml.v3"
 )
 
 type packageCommand struct {
 	file string
 }
 
-func configurePackagesCommand(app *kingpin.Application) {
+func configurePackagesCommand(app *fisk.Application) {
 	c := &packageCommand{}
 
 	pkg := app.Command("package", "Creates packages hosting handlers").Alias("pkg")
@@ -29,7 +29,7 @@ func configurePackagesCommand(app *kingpin.Application) {
 	pkg.Flag("file", "Use a specific configuration file rather than asyncjobs.yaml").Default("asyncjobs.yaml").ExistingFileVar(&c.file)
 }
 
-func (c *packageCommand) dockerAction(_ *kingpin.ParseContext) error {
+func (c *packageCommand) dockerAction(_ *fisk.ParseContext) error {
 	createLogger()
 
 	_, err := os.Stat(c.file)
