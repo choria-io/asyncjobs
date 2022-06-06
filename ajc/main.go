@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/choria-io/asyncjobs"
+	"github.com/choria-io/fisk"
 	"github.com/nats-io/jsm.go/natscontext"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -24,15 +24,15 @@ var (
 	log    *logrus.Entry
 	client *asyncjobs.Client
 	admin  asyncjobs.StorageAdmin
-	ajc    *kingpin.Application
+	ajc    *fisk.Application
 )
 
 func main() {
-	ajc = kingpin.New("ajc", "Choria Asynchronous Jobs")
+	ajc = fisk.New("ajc", "Choria Asynchronous Jobs")
 	ajc.Version(version)
 	ajc.Author("R.I.Pienaar <rip@devco.net>")
 	ajc.UsageWriter(os.Stdout)
-	ajc.UsageTemplate(kingpin.CompactUsageTemplate)
+	ajc.UsageTemplate(fisk.CompactUsageTemplate)
 	ajc.HelpFlag.Short('h')
 
 	ajc.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)

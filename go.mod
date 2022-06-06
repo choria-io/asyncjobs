@@ -8,6 +8,7 @@ replace github.com/nats-io/jwt v1.2.2 => github.com/nats-io/jwt/v2 v2.2.0
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.4
+	github.com/choria-io/fisk v0.0.3-0.20220605065054-0cf82636ff4e
 	github.com/dustin/go-humanize v1.0.0
 	github.com/nats-io/jsm.go v0.0.31
 	github.com/nats-io/nats-server/v2 v2.8.3-0.20220504192053-f20fe2c2d8b8
@@ -20,13 +21,10 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/xlab/tablewriter v0.0.0-20160610135559-80b567a11ad5
 	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
-	gopkg.in/alecthomas/kingpin.v2 v2.2.6
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
-	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -49,4 +47,5 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
