@@ -2,25 +2,21 @@ module github.com/choria-io/asyncjobs
 
 go 1.17
 
-// this should not be needed, but something somewhere is putting jwt v1 in go.sum
-// triggering github security alerts, the dependency is unused
-replace github.com/nats-io/jwt v1.2.2 => github.com/nats-io/jwt/v2 v2.2.0
-
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.4
 	github.com/choria-io/fisk v0.0.3-0.20220605065054-0cf82636ff4e
 	github.com/dustin/go-humanize v1.0.0
-	github.com/nats-io/jsm.go v0.0.31
-	github.com/nats-io/nats-server/v2 v2.8.3-0.20220504192053-f20fe2c2d8b8
-	github.com/nats-io/nats.go v1.15.0
+	github.com/nats-io/jsm.go v0.0.33
+	github.com/nats-io/nats-server/v2 v2.8.4
+	github.com/nats-io/nats.go v1.16.0
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
-	github.com/prometheus/client_golang v1.12.1
+	github.com/prometheus/client_golang v1.12.2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/sirupsen/logrus v1.8.1
 	github.com/xlab/tablewriter v0.0.0-20160610135559-80b567a11ad5
-	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
+	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -29,7 +25,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/klauspost/compress v1.15.1 // indirect
+	github.com/klauspost/compress v1.15.5 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
