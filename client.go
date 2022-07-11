@@ -133,8 +133,11 @@ func (c *Client) startPrometheus() {
 		return
 	}
 
+	// Create a new mux to avoid an error serving the same path in multiple instances
+	mux := http.NewServeMux()
+
 	c.log.Warnf("Exposing Prometheus metrics on port %d", c.opts.statsPort)
-	http.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
 	go func() {
 		err := http.ListenAndServe(fmt.Sprintf(":%d", c.opts.statsPort), nil)
 		if err != nil {
