@@ -40,7 +40,7 @@ type ProcessItem struct {
 	Kind  ItemKind `json:"kind"`
 	JobID string   `json:"job"`
 
-	storageMeta interface{}
+	storageMeta any
 }
 
 func newProcessItem(kind ItemKind, id string) ([]byte, error) {

@@ -17,7 +17,7 @@ Below is a handler that sends an email, the task Payload is a serialized object 
 The Task handler then is a single-purpose piece of code capable of handling 1 type of Task.
 
 ```go
-func emailNewHandler(ctx context.Context, log asycjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+func emailNewHandler(ctx context.Context, log asycjobs.Logger, task *asyncjobs.Task) (any, error) {
 	// Parse the task payload into an email
 	email, err := parseEmail(task.Payload)
 	if err != nil { return nil, err }

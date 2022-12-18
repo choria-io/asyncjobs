@@ -105,7 +105,7 @@ func humanizeDuration(d time.Duration) string {
 	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
-func dumpJSON(d interface{}) {
+func dumpJSON(d any) {
 	j, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
 		panic(fmt.Sprintf("could not JSON render: %v", err))

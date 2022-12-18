@@ -59,7 +59,7 @@ Any number of producers can create tasks from any number of different processes.
 First we have a simplistic helper to create a map that describes an email:
 
 ```go
-func newEmail(to, subject, body string) interface{} {
+func newEmail(to, subject, body string) any {
         return map[string]string{"to": to, "subject": subject, "body": body}
 }
 ```
@@ -105,7 +105,7 @@ client, err := asyncjobs.NewClient(
 panicIfErr(err)
 
 router := asyncjobs.NewTaskRouter()
-err = router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+err = router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (any, error) {
         log.Printf("Processing task %s", task.ID)
 
         // do work here using task.Payload

@@ -50,7 +50,7 @@ var _ = Describe("Router", func() {
 	Describe("Handler", func() {
 		It("Should support default handler", func() {
 			router := NewTaskRouter()
-			router.HandleFunc("x", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
+			router.HandleFunc("x", func(_ context.Context, _ Logger, _ *Task) (any, error) {
 				return "x", nil
 			})
 
@@ -64,16 +64,16 @@ var _ = Describe("Router", func() {
 
 		It("Should find the correct handler", func() {
 			router := NewTaskRouter()
-			router.HandleFunc("", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
+			router.HandleFunc("", func(_ context.Context, _ Logger, _ *Task) (any, error) {
 				return "custom default", nil
 			})
-			router.HandleFunc("things:", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:", func(_ context.Context, _ Logger, _ *Task) (any, error) {
 				return "things:", nil
 			})
-			router.HandleFunc("things:very:specific", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:very:specific", func(_ context.Context, _ Logger, _ *Task) (any, error) {
 				return "things:very:specific", nil
 			})
-			router.HandleFunc("things:specific", func(_ context.Context, _ Logger, _ *Task) (interface{}, error) {
+			router.HandleFunc("things:specific", func(_ context.Context, _ Logger, _ *Task) (any, error) {
 				return "things:specific", nil
 			})
 

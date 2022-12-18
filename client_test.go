@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"sync"
@@ -29,7 +28,7 @@ func TestAsyncJobs(t *testing.T) {
 }
 
 func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
-	d, err := ioutil.TempDir("", "jstest")
+	d, err := os.MkdirTemp("", "jstest")
 	Expect(err).ToNot(HaveOccurred())
 	defer os.RemoveAll(d)
 
@@ -152,7 +151,7 @@ var _ = Describe("Client", func() {
 			handled := int32(0)
 
 			router := NewTaskRouter()
-			router.HandleFunc("test", func(ctx context.Context, log Logger, t *Task) (interface{}, error) {
+			router.HandleFunc("test", func(ctx context.Context, log Logger, t *Task) (any, error) {
 				if t.Tries > 1 {
 					log.Infof("Try %d for task %s", t.Tries, t.ID)
 				}
@@ -212,7 +211,7 @@ var _ = Describe("Client", func() {
 			var tries []time.Time
 
 			router := NewTaskRouter()
-			router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, t *Task) (interface{}, error) {
+			router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, t *Task) (any, error) {
 				tries = append(tries, time.Now())
 
 				log.Infof("Trying task %s on try %d\n", t.ID, t.Tries)

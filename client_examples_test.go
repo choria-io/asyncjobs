@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-func newEmail(to, subject, body string) map[string]interface{} {
-	return map[string]interface{}{
+func newEmail(to, subject, body string) map[string]any {
+	return map[string]any{
 		"to":      to,
 		"subject": subject,
 		"body":    body,
@@ -71,7 +71,7 @@ func ExampleClient_consumer() {
 	panicIfErr(err)
 
 	router := NewTaskRouter()
-	err = router.HandleFunc("email:send", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
+	err = router.HandleFunc("email:send", func(_ context.Context, _ Logger, t *Task) (any, error) {
 		log.Printf("Processing task: %s", t.ID)
 
 		// handle task.Payload which is a JSON encoded email

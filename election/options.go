@@ -23,7 +23,7 @@ type options struct {
 	lostCb     func()
 	campaignCb func(s State)
 	bo         Backoff
-	debug      func(format string, a ...interface{})
+	debug      func(format string, a ...any)
 }
 
 // WithBackoff will use the provided Backoff timer source to decrease campaign intervals over time
@@ -47,6 +47,6 @@ func OnCampaign(cb func(s State)) Option {
 }
 
 // WithDebug sets a function to do debug logging with
-func WithDebug(cb func(format string, a ...interface{})) Option {
+func WithDebug(cb func(format string, a ...any)) Option {
 	return func(o *options) { o.debug = cb }
 }

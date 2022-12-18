@@ -7,7 +7,6 @@ package election
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -31,7 +30,7 @@ var _ = Describe("Leader Election", func() {
 		js       nats.KeyValueManager
 		kv       nats.KeyValue
 		err      error
-		debugger func(f string, a ...interface{})
+		debugger func(f string, a ...any)
 	)
 
 	BeforeEach(func() {
@@ -45,7 +44,7 @@ var _ = Describe("Leader Election", func() {
 			TTL:    750 * time.Millisecond,
 		})
 		Expect(err).ToNot(HaveOccurred())
-		debugger = func(f string, a ...interface{}) {
+		debugger = func(f string, a ...any) {
 			fmt.Fprintf(GinkgoWriter, fmt.Sprintf("%s\n", f), a...)
 		}
 	})
@@ -208,7 +207,7 @@ var _ = Describe("Leader Election", func() {
 func startJSServer(t GinkgoTInterface) (*server.Server, *nats.Conn) {
 	t.Helper()
 
-	d, err := ioutil.TempDir("", "jstest")
+	d, err := os.MkdirTemp("", "jstest")
 	if err != nil {
 		t.Fatalf("temp dir could not be made: %s", err)
 	}

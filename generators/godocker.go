@@ -63,7 +63,7 @@ func (g *GoContainer) RenderToDirectory(target string) error {
 		}
 	}
 
-	funcs := map[string]interface{}{
+	funcs := map[string]any{
 		"RetryNamesList": func() string {
 			return strings.Join(aj.RetryPolicyNames(), ", ")
 		},

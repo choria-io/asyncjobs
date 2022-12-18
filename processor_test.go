@@ -43,7 +43,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (any, error) {
 					wg.Done()
 					return nil, fmt.Errorf("simulated failure: %w", ErrTerminateTask)
 				})
@@ -88,7 +88,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (any, error) {
 					wg.Done()
 					return nil, fmt.Errorf("simulated failure")
 				})
@@ -129,7 +129,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(_ context.Context, _ Logger, t *Task) (any, error) {
 					wg.Done()
 					return "done", nil
 				})
@@ -346,7 +346,7 @@ var _ = Describe("Processor", func() {
 				wg.Add(1)
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (any, error) {
 					// these will panic as its in a different routine, but they are supposed to pass so thats fine
 					t, err := client.LoadTaskByID(task.ID)
 					Expect(err).ToNot(HaveOccurred())
@@ -468,7 +468,7 @@ var _ = Describe("Processor", func() {
 				var runs []string
 
 				router := NewTaskRouter()
-				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (interface{}, error) {
+				router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, task *Task) (any, error) {
 					mu.Lock()
 					defer mu.Unlock()
 					defer wg.Done()

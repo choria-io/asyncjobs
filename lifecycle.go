@@ -58,7 +58,7 @@ const (
 )
 
 // ParseEventJSON parses event bytes returning the parsed Event and its event type
-func ParseEventJSON(event []byte) (interface{}, string, error) {
+func ParseEventJSON(event []byte) (any, string, error) {
 	var base BaseEvent
 	err := json.Unmarshal(event, &base)
 	if err != nil {

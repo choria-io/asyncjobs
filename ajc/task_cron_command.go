@@ -201,7 +201,7 @@ func (c *taskCronCommand) addAction(_ *fisk.ParseContext) error {
 		opts = append(opts, aj.TaskMaxTries(c.maxtries))
 	}
 
-	var payload interface{}
+	var payload any
 	if c.payload != "" {
 		payload = c.payload
 	}

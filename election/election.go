@@ -111,7 +111,7 @@ func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) 
 	return e, nil
 }
 
-func (e *election) debugf(format string, a ...interface{}) {
+func (e *election) debugf(format string, a ...any) {
 	if e.opts.debug == nil {
 		return
 	}

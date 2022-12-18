@@ -77,7 +77,7 @@ func newScheduledTaskFromTask(name string, schedule string, queue string, task *
 	return sched, cs, nil
 }
 
-func newScheduledTask(name string, schedule string, queue string, taskType string, payload interface{}, opts ...TaskOpt) (*ScheduledTask, cron.Schedule, error) {
+func newScheduledTask(name string, schedule string, queue string, taskType string, payload any, opts ...TaskOpt) (*ScheduledTask, cron.Schedule, error) {
 	task, err := NewTask(taskType, payload, opts...)
 	if err != nil {
 		return nil, nil, err

@@ -19,7 +19,7 @@ import (
 	aj "github.com/choria-io/asyncjobs"
 )
 
-func AsyncJobHandler(ctx context.Context, log aj.Logger, task *aj.Task) (interface{}, error) {
+func AsyncJobHandler(ctx context.Context, log aj.Logger, task *aj.Task) (any, error) {
 	// process your email
 }
 ```
