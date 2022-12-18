@@ -52,7 +52,7 @@ func RequestReplySubjectForTaskType(taskType string) string {
 	return fmt.Sprintf(RequestReplyTaskHandlerPattern, taskType)
 }
 
-func (r *requestReplyHandler) processTask(ctx context.Context, logger Logger, task *Task) (interface{}, error) {
+func (r *requestReplyHandler) processTask(ctx context.Context, logger Logger, task *Task) (any, error) {
 	if r.nc == nil {
 		return nil, fmt.Errorf("no connnection set")
 	}

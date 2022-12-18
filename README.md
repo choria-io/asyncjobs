@@ -59,7 +59,7 @@ client, _ := asyncjobs.NewClient(
 	asyncjobs.RetryBackoffPolicy(asyncjobs.RetryLinearTenMinutes))
 
 router := asyncjobs.NewTaskRouter()
-router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (interface{}, error) {
+router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (any, error) {
 	log.Printf("Processing task %s", task.ID)
 
 	// do work here using task.Payload

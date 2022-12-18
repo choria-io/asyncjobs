@@ -111,7 +111,7 @@ var _ = Describe("RequestReplyHandler", func() {
 
 			go func() {
 				nc.Subscribe(fmt.Sprintf(RequestReplyTaskHandlerPattern, "email:new"), func(msg *nats.Msg) {
-					fail := func(format string, a ...interface{}) {
+					fail := func(format string, a ...any) {
 						resp := nats.NewMsg(msg.Subject)
 						resp.Header.Add(RequestReplyError, fmt.Sprintf(format, a...))
 						msg.RespondMsg(resp)

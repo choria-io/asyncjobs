@@ -90,7 +90,7 @@ type Task struct {
 	// LastErr is the most recent handling error if any
 	LastErr string `json:"last_err,omitempty"`
 
-	storageOptions interface{}
+	storageOptions any
 	mu             sync.Mutex
 }
 
@@ -104,13 +104,13 @@ type TasksInfo struct {
 
 // TaskResult is the result of task execution, this will only be set for successfully processed jobs
 type TaskResult struct {
-	Payload     interface{} `json:"payload"`
-	CompletedAt time.Time   `json:"completed"`
+	Payload     any       `json:"payload"`
+	CompletedAt time.Time `json:"completed"`
 }
 
 // NewTask creates a new task of taskType that can later be used to route tasks to handlers.
 // The task will carry a JSON encoded representation of payload.
-func NewTask(taskType string, payload interface{}, opts ...TaskOpt) (*Task, error) {
+func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 	if !IsValidName(taskType) {
 		return nil, fmt.Errorf("%w: must match %s", ErrTaskTypeInvalid, validNameMatcher)
 	}

@@ -24,7 +24,7 @@ Connects to JetStream and manages the enqueueing and routing of tasks.
 
 ## Handler
 
-Handlers are functions that can process a task with the signature `func(context.Context, *asyncjobs.Task) (interface{}, error)`.
+Handlers are functions that can process a task with the signature `func(context.Context, *asyncjobs.Task) (any, error)`.
 
 ## Router
 

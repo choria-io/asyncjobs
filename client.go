@@ -186,7 +186,7 @@ func (c *Client) saveOrDiscardTaskIfDesired(ctx context.Context, t *Task) error 
 	return c.storage.DeleteTaskByID(t.ID)
 }
 
-func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload interface{}) error {
+func (c *Client) setTaskSuccess(ctx context.Context, t *Task, payload any) error {
 	t.LastTriedAt = nowPointer()
 	t.State = TaskStateCompleted
 	t.LastErr = ""
