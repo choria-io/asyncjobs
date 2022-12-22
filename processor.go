@@ -139,6 +139,7 @@ func (p *processor) processMessage(ctx context.Context, item *ProcessItem) error
 		if errors.Is(err, ErrTaskNotFound) {
 			p.log.Warnf("Could not find task data for %s, discarding work item", item.JobID)
 			p.c.storage.TerminateItem(ctx, item)
+			p.limiter <- struct{}{} // todo handle this in a better place
 			return nil
 		}
 
