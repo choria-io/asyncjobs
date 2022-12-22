@@ -7,8 +7,8 @@ require (
 	github.com/choria-io/fisk v0.2.1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/nats-io/jsm.go v0.0.35
-	github.com/nats-io/nats-server/v2 v2.9.9
-	github.com/nats-io/nats.go v1.21.0
+	github.com/nats-io/nats-server/v2 v2.9.10
+	github.com/nats-io/nats.go v1.22.1
 	github.com/onsi/ginkgo/v2 v2.6.1
 	github.com/onsi/gomega v1.24.2
 	github.com/prometheus/client_golang v1.14.0
