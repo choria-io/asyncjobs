@@ -32,8 +32,6 @@ func main() {
 	ajc.Version(version)
 	ajc.Author("R.I.Pienaar <rip@devco.net>")
 	ajc.UsageWriter(os.Stdout)
-	ajc.UsageTemplate(fisk.CompactMainUsageTemplate)
-	ajc.ErrorUsageTemplate(fisk.CompactMainUsageTemplate)
 	ajc.HelpFlag.Short('h')
 
 	ajc.Flag("context", "NATS Context to use for connecting to JetStream").PlaceHolder("NAME").Envar("CONTEXT").Default("AJC").StringVar(&nctx)
