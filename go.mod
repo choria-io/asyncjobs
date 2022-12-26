@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.6
-	github.com/choria-io/fisk v0.2.1
+	github.com/choria-io/fisk v0.3.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/nats-io/jsm.go v0.0.35
 	github.com/nats-io/nats-server/v2 v2.9.10
