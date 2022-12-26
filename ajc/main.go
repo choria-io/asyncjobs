@@ -56,8 +56,10 @@ func main() {
 
 		default:
 			fmt.Fprintf(os.Stderr, "ajc runtime error: %v\n", err)
-			fmt.Fprintln(os.Stderr)
-			ajc.Usage(os.Args[1:])
+			if err != asyncjobs.ErrNoTasks {
+				fmt.Fprintln(os.Stderr)
+				ajc.Usage(os.Args[1:])
+			}
 		}
 
 		os.Exit(1)
