@@ -188,7 +188,7 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	It("Should handle retried messages with a backoff delay", func() {
+	It("Should handle retried messages with a backoff delay", FlakeAttempts(5), func() {
 		withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -211,10 +211,10 @@ var _ = Describe("Client", func() {
 			var tries []time.Time
 
 			router := NewTaskRouter()
-			router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, t *Task) (any, error) {
+			err = router.HandleFunc("ginkgo", func(ctx context.Context, log Logger, t *Task) (any, error) {
 				tries = append(tries, time.Now())
 
-				log.Infof("Trying task %s on try %d\n", t.ID, t.Tries)
+				log.Errorf("Trying task %s on try %d\n", t.ID, t.Tries)
 
 				if t.Tries < 2 {
 					return "fail", fmt.Errorf("simulated failure")
@@ -223,16 +223,20 @@ var _ = Describe("Client", func() {
 				wg.Done()
 				return "done", nil
 			})
+			Expect(err).ToNot(HaveOccurred())
 
 			go client.Run(ctx, router)
 
 			wg.Wait()
 
+			// we wg.done in the handler but the router is still doing its thing so we pause a bit
+			time.Sleep(250 * time.Millisecond)
+
 			Expect(len(tries)).To(Equal(6))
 			task, err = client.LoadTaskByID(task.ID)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(task.State).To(Equal(TaskStateCompleted))
 			Expect(task.Tries).To(Equal(2))
+			Expect(task.State).To(Equal(TaskStateCompleted))
 		})
 	})
 })

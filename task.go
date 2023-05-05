@@ -5,8 +5,12 @@
 package asyncjobs
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -89,7 +93,10 @@ type Task struct {
 	Tries int `json:"tries"`
 	// LastErr is the most recent handling error if any
 	LastErr string `json:"last_err,omitempty"`
+	// Signature is an ed25519 signature of key properties
+	Signature string `json:"signature,omitempty"`
 
+	sigPk          ed25519.PrivateKey
 	storageOptions any
 	mu             sync.Mutex
 }
@@ -164,6 +171,47 @@ func (t *Task) HasDependencies() bool {
 	return len(t.Dependencies) > 0
 }
 
+func (t *Task) Sign() error {
+	if t.sigPk == nil {
+		return nil
+	}
+
+	if t.Signature != "" {
+		return ErrTaskAlreadySigned
+	}
+
+	if len(t.sigPk) != ed25519.PrivateKeySize {
+		return ErrInvalidPrivateKey
+	}
+
+	msg, err := t.signatureMessage()
+	if err != nil {
+		return err
+	}
+
+	t.Signature = hex.EncodeToString(ed25519.Sign(t.sigPk, msg))
+
+	io.ReadFull(rand.Reader, t.sigPk[:])
+	t.sigPk = nil
+
+	return nil
+}
+
+func (t *Task) signatureMessage() ([]byte, error) {
+	if t.Queue == "" {
+		return nil, ErrTaskSignatureRequiresQueue
+	}
+
+	var deadline int64
+	if t.Deadline != nil {
+		deadline = t.Deadline.UnixNano()
+	}
+
+	msg := fmt.Sprintf("%s:%s:%s:%d:%d:%d", t.ID, t.Queue, t.Type, t.MaxTries, t.CreatedAt.UnixNano(), deadline)
+
+	return []byte(msg), nil
+}
+
 // TaskOpt configures Tasks made using NewTask()
 type TaskOpt func(*Task) error
 
@@ -226,6 +274,14 @@ func TaskDependsOn(tasks ...*Task) TaskOpt {
 func TaskRequiresDependencyResults() TaskOpt {
 	return func(t *Task) error {
 		t.LoadDependencies = true
+		return nil
+	}
+}
+
+// TaskSigner signs the task using the given private key
+func TaskSigner(key ed25519.PrivateKey) TaskOpt {
+	return func(t *Task) error {
+		t.sigPk = key
 		return nil
 	}
 }

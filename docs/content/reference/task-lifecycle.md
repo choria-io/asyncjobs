@@ -87,7 +87,7 @@ Tasks have many possible states and the processor will update the task as it tra
 | `TaskStateRetry`       | A task that had a previous failure and is now scheduled for later retry or one that was manually retried |
 | `TaskStateExpired`     | A task that was attempted to be processed but at that time it exceeded its deadline                      |
 | `TaskStateTerminated`  | A handler returned an `ErrTerminateTask` error and so will not be retried again                          |
-| `TaskStateCompleted`   | Succesful completed task                                                                                 |
+| `TaskStateCompleted`   | Successful completed task                                                                                |
 | `TaskStateQueueError`  | Task was created but the Work Queue entry could not be made                                              |
 | `TaskStateBlocked`     | When a Task is waiting on it's dependencies (since `0.0.8`)                                              |
 | `TaskStateUnreachable` | When a Task cannot execute because a dependent task failed (since `0.0.8`)                               |
