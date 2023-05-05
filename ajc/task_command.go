@@ -6,7 +6,10 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -36,6 +39,7 @@ type taskCommand struct {
 	discardExpired  bool
 	dependencies    []string
 	loadDepResults  bool
+	ed25519Seed     string
 
 	limit int
 	json  bool
@@ -55,6 +59,7 @@ func configureTaskCommand(app *fisk.Application) {
 	add.Flag("tries", "Sets the maximum amount of times this task may be tried").IntVar(&c.maxtries)
 	add.Flag("depends", "Sets IDs to depend on, comma sep or pass multiple times").StringsVar(&c.dependencies)
 	add.Flag("load", "Loads results from dependencies before executing task").BoolVar(&c.loadDepResults)
+	add.Flag("sign", "Signs the task using an ed25519 seed").StringVar(&c.ed25519Seed)
 
 	retry := tasks.Command("retry", "Retries delivery of a task currently in the Task Store").Action(c.retryAction)
 	retry.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
@@ -175,6 +180,9 @@ func (c *taskCommand) watchAction(_ *fisk.ParseContext) error {
 			} else {
 				fmt.Printf("[%s] %s: queue: %s type: %s tries: %d state: %s error: %s\n", e.TimeStamp.Format("15:04:05"), e.TaskID, e.Queue, e.TaskType, e.Tries, e.State, e.LastErr)
 			}
+
+		case aj.LeaderElectedEvent:
+			fmt.Printf("[%s] %s: new %s leader\n", e.TimeStamp.Format("15:04:05"), e.Name, e.Component)
 
 		default:
 			fmt.Printf("[%s] Unknown event type %s\n", time.Now().UTC().Format("15:04:05"), kind)
@@ -410,6 +418,22 @@ func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
 
 	if c.maxtries > 0 {
 		opts = append(opts, aj.TaskMaxTries(c.maxtries))
+	}
+
+	if c.ed25519Seed != "" {
+		var seed []byte
+		if fileExist(c.ed25519Seed) {
+			seed, err = os.ReadFile(c.ed25519Seed)
+			if err != nil {
+				return err
+			}
+		} else {
+			seed, err = hex.DecodeString(c.ed25519Seed)
+			if err != nil {
+				return err
+			}
+		}
+		opts = append(opts, aj.TaskSigner(ed25519.NewKeyFromSeed(seed)))
 	}
 
 	task, err := aj.NewTask(c.ttype, c.payload, opts...)

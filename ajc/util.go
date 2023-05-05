@@ -224,3 +224,15 @@ func showQueue(q *asyncjobs.QueueInfo) {
 		fmt.Printf("       Last Item: %v (%s)\n", q.Stream.State.LastTime.Format(timeFormat), humanizeDuration(time.Since(q.Stream.State.LastTime)))
 	}
 }
+
+func fileExist(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}

@@ -7,6 +7,7 @@ package asyncjobs
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -914,11 +915,16 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				task, err := NewTask("ginkgo", nil)
+				_, pri, err := ed25519.GenerateKey(nil)
 				Expect(err).ToNot(HaveOccurred())
 
+				task, err := NewTask("ginkgo", nil, TaskSigner(pri))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(task.Signature).To(HaveLen(0))
 				err = storage.EnqueueTask(ctx, q, task)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(task.Signature).To(HaveLen(128))
 
 				msg, err := storage.qStreams[q.Name].ReadMessage(1)
 				Expect(err).ToNot(HaveOccurred())
@@ -929,8 +935,9 @@ var _ = Describe("Storage", func() {
 				Expect(item.Kind).To(Equal(TaskItem))
 				Expect(item.JobID).To(Equal(task.ID))
 
-				_, err = storage.LoadTaskByID(task.ID)
+				t, err := storage.LoadTaskByID(task.ID)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(t.Signature).To(Equal(task.Signature))
 			})
 		})
 	})

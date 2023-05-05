@@ -36,6 +36,10 @@ var (
 	ErrTaskTypeInvalid = fmt.Errorf("task type is invalid")
 	// ErrTaskDependenciesFailed indicates that the task cannot be run as its dependencies failed
 	ErrTaskDependenciesFailed = fmt.Errorf("task dependencies failed")
+	// ErrTaskAlreadySigned indicates a task is already signed
+	ErrTaskAlreadySigned = fmt.Errorf("task is already signed")
+	// ErrTaskSignatureRequiresQueue indicates a signature request was made without configuring the queue name for a task
+	ErrTaskSignatureRequiresQueue = fmt.Errorf("signing a task requires the queue to be set")
 
 	// ErrNoHandlerForTaskType indicates that a task could not be handled by any known handlers
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")
@@ -73,14 +77,15 @@ var (
 	ErrExternalCommandNotFound = fmt.Errorf("command not found")
 	// ErrExternalCommandFailed indicates a command for an ExternalProcess handler failed
 	ErrExternalCommandFailed = fmt.Errorf("execution failed")
+
 	// ErrUnknownEventType indicates that while parsing an event an unknown type of event was encountered
 	ErrUnknownEventType = fmt.Errorf("unknown event type")
-
 	// ErrUnknownRetryPolicy indicates the requested retry policy does not exist
 	ErrUnknownRetryPolicy = fmt.Errorf("unknown retry policy")
-
 	// ErrUnknownDiscardPolicy indicates a discard policy could not be found matching a name
 	ErrUnknownDiscardPolicy = fmt.Errorf("unknown discard policy")
+	// ErrInvalidPrivateKey indicates the private key is not valid
+	ErrInvalidPrivateKey = fmt.Errorf("invalid private key length")
 
 	// ErrRequestReplyFailed indicates a callout to a remote handler failed due to a timeout, lack of listeners or network error
 	ErrRequestReplyFailed = fmt.Errorf("request-reply callout failed")
