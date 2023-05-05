@@ -66,7 +66,7 @@ $ nats reply CHORIA_AJ.H.T.email:new 'success' --context AJC
 {"id":"24smZHaWnjuP371iglxeQWK7nOi","type":"email:new","queue":"DEFAULT","payload":"InsuLi4ufSI=","state":"active","created":"2022-02-09T17:28:41.943198067Z","tried":"2022-02-09T17:33:33.005041134Z","tries":5}
 ```
 
-The CLI recieved the jobs with the 2 headers set and appropriate payload, it responsed with `success` and the task was completed.
+The CLI received the jobs with the 2 headers set and appropriate payload, it responsed with `success` and the task was completed.
 
 ```
 $ ajc task view 24smZHaWnjuP371iglxeQWK7nOi --json

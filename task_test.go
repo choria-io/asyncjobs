@@ -55,6 +55,7 @@ var _ = Describe("Tasks", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(msg).To(HaveLen(77))
 			sig, err := hex.DecodeString(task.Signature)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(sig).To(HaveLen(64))
 			Expect(ed25519.Verify(pub, msg, sig)).To(BeTrue())
 		})

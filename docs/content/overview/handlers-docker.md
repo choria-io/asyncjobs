@@ -55,7 +55,7 @@ asyncjobs: latest
 
 # Use the RetryLinearTenMinutes retry policy,
 #
-# Equivelant to client RetryBackoffPolicyName() option
+# Equivalent to client RetryBackoffPolicyName() option
 retry: 10m
 
 # Discard tasks that reach complete state.

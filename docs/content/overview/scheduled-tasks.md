@@ -6,7 +6,7 @@ weight = 20
 
 The Task Scheduler allows you to create cron like entries that will create Tasks on demand.
 
-This requires a seperate process to be run that will supervise the configured schedules and create the tasks.  We have such a Scheduler built into the `ajc` binary deployable in any container manager.
+This requires a separate process to be run that will supervise the configured schedules and create the tasks.  We have such a Scheduler built into the `ajc` binary deployable in any container manager.
 
 The scheduler we provide support being deployed in a highly-available cluster, they will perform leader election with one of the cluster scheduling tasks. There is no need to restart or signal these schedulers as tasks are added, removed or updated.
 
