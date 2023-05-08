@@ -37,6 +37,7 @@ func createLogger() {
 
 	log = logrus.NewEntry(logger)
 }
+
 func prepare(copts ...asyncjobs.ClientOpt) error {
 	if client != nil {
 		return nil

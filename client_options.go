@@ -5,6 +5,7 @@
 package asyncjobs
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"time"
 
@@ -14,22 +15,41 @@ import (
 
 // ClientOpts configures the client
 type ClientOpts struct {
-	concurrency   int
-	replicas      int
-	queue         *Queue
-	taskRetention time.Duration
-	retryPolicy   RetryPolicyProvider
-	memoryStore   bool
-	statsPort     int
-	logger        Logger
-	skipPrepare   bool
-	discard       []TaskState
+	concurrency            int
+	replicas               int
+	queue                  *Queue
+	taskRetention          time.Duration
+	retryPolicy            RetryPolicyProvider
+	memoryStore            bool
+	statsPort              int
+	logger                 Logger
+	skipPrepare            bool
+	discard                []TaskState
+	privateKey             ed25519.PrivateKey
+	seedFile               string
+	publicKey              ed25519.PublicKey
+	publicKeyFile          string
+	optionalTaskSignatures bool
 
 	nc *nats.Conn
 }
 
 // ClientOpt configures the client
 type ClientOpt func(opts *ClientOpts) error
+
+func (c *ClientOpts) validate() error {
+	if c.privateKey != nil && c.seedFile != "" {
+		return fmt.Errorf("cannot set both private key and seed file")
+	}
+	if c.publicKey != nil && c.publicKeyFile != "" {
+		return fmt.Errorf("cannot set both public key and public key file")
+	}
+	if c.seedFile != "" && (c.publicKeyFile != "" || c.publicKey != nil) {
+		return fmt.Errorf("cannot set a seedfile and public key information")
+	}
+
+	return nil
+}
 
 // DiscardTaskStates configures the client to discard Tasks that reach a final state in the list of supplied TaskState
 func DiscardTaskStates(states ...TaskState) ClientOpt {
@@ -232,6 +252,46 @@ func BindWorkQueue(queue string) ClientOpt {
 func TaskRetention(r time.Duration) ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.taskRetention = r
+		return nil
+	}
+}
+
+// TaskSigningKey sets a key used to sign tasks, will be kept in memory for the duration
+func TaskSigningKey(pk ed25519.PrivateKey) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.privateKey = pk
+		return nil
+	}
+}
+
+// TaskSigningSeedFile sets the path to a file holding a ed25519 seed, will be used for signing and verification and wiped between uses
+func TaskSigningSeedFile(sf string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.seedFile = sf
+		return nil
+	}
+}
+
+// TaskVerificationKey sets a public key used to verify tasks
+func TaskVerificationKey(pk ed25519.PublicKey) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.publicKey = pk
+		return nil
+	}
+}
+
+// TaskVerificationKeyFile sets the path to a file holding a ed25519 public key, will be used for verification of tasks
+func TaskVerificationKeyFile(sf string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.publicKeyFile = sf
+		return nil
+	}
+}
+
+// TaskSignaturesOptional indicates that only signed tasks can be loaded
+func TaskSignaturesOptional() ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.optionalTaskSignatures = true
 		return nil
 	}
 }

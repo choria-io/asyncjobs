@@ -1,8 +1,6 @@
 package asyncjobs
 
 import (
-	"crypto/ed25519"
-	"encoding/hex"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -35,29 +33,19 @@ var _ = Describe("Tasks", func() {
 			Expect(task.LoadDependencies).To(BeTrue())
 			Expect(task.MaxTries).To(Equal(DefaultMaxTries))
 
-			pub, pri, err := ed25519.GenerateKey(nil)
-			Expect(err).ToNot(HaveOccurred())
-
 			// without dependencies, should be new
-			task, err = NewTask("test", payload, TaskDeadline(deadline), TaskMaxTries(10), TaskSigner(pri))
+			task, err = NewTask("test", payload, TaskDeadline(deadline), TaskMaxTries(10))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.State).To(Equal(TaskStateNew))
 			Expect(task.LoadDependencies).To(BeFalse())
 			Expect(task.MaxTries).To(Equal(10))
-			Expect(task.sigPk).To(Equal(pri))
 
-			Expect(task.Sign()).To(MatchError(ErrTaskSignatureRequiresQueue))
+			_, err = task.signatureMessage()
+			Expect(err).To(MatchError(ErrTaskSignatureRequiresQueue))
 			task.Queue = "x"
-			Expect(task.Sign()).To(Succeed())
-			Expect(task.Signature).ToNot(HaveLen(0))
-
 			msg, err := task.signatureMessage()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(msg).To(HaveLen(77))
-			sig, err := hex.DecodeString(task.Signature)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(sig).To(HaveLen(64))
-			Expect(ed25519.Verify(pub, msg, sig)).To(BeTrue())
+			Expect(msg).To(HaveLen(102))
 		})
 	})
 })

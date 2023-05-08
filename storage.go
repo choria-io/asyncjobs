@@ -212,11 +212,6 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 
 	task.Queue = queue.Name
 
-	err = task.Sign()
-	if err != nil {
-		return err
-	}
-
 	err = s.SaveTaskState(ctx, task, true)
 	if err != nil {
 		return err
