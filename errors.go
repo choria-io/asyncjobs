@@ -40,6 +40,10 @@ var (
 	ErrTaskAlreadySigned = fmt.Errorf("task is already signed")
 	// ErrTaskSignatureRequiresQueue indicates a signature request was made without configuring the queue name for a task
 	ErrTaskSignatureRequiresQueue = fmt.Errorf("signing a task requires the queue to be set")
+	// ErrTaskNotSigned indicates a task was loaded that had no signature while signatures are required
+	ErrTaskNotSigned = fmt.Errorf("task is not signed")
+	// ErrTaskSignatureInvalid indicates a signature did not pass validation
+	ErrTaskSignatureInvalid = fmt.Errorf("invalid task signature")
 
 	// ErrNoHandlerForTaskType indicates that a task could not be handled by any known handlers
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")

@@ -6,9 +6,14 @@ package asyncjobs
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -39,6 +44,11 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	err = copts.validate()
+	if err != nil {
+		return nil, err
 	}
 
 	c := &Client{opts: copts, log: copts.logger}
@@ -85,7 +95,17 @@ func (c *Client) Run(ctx context.Context, router *Mux) error {
 
 // LoadTaskByID loads a task from the backend using its ID
 func (c *Client) LoadTaskByID(id string) (*Task, error) {
-	return c.storage.LoadTaskByID(id)
+	task, err := c.storage.LoadTaskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.verifyTaskSignature(task)
+	if err != nil {
+		return nil, err
+	}
+
+	return task, nil
 }
 
 // RetryTaskByID will retry a task, first removing an entry from the Work Queue if already there
@@ -95,7 +115,133 @@ func (c *Client) RetryTaskByID(ctx context.Context, id string) error {
 
 // EnqueueTask adds a task to the named queue which must already exist
 func (c *Client) EnqueueTask(ctx context.Context, task *Task) error {
+	task.Queue = c.opts.queue.Name
+
+	err := c.signTask(task)
+	if err != nil {
+		return err
+	}
+
 	return c.opts.queue.enqueueTask(ctx, task)
+}
+
+func (c *Client) verifyTaskSignature(task *Task) error {
+	// is disabled
+	if c.opts.publicKey == nil && c.opts.publicKeyFile == "" {
+		return nil
+	}
+
+	switch {
+	case !c.opts.optionalTaskSignatures && task.Signature == "":
+		return ErrTaskNotSigned
+
+	case task.Signature == "":
+		return nil
+	}
+
+	var pubKey ed25519.PublicKey
+
+	switch {
+	case c.opts.publicKey != nil:
+		pubKey = c.opts.publicKey
+
+	case c.opts.publicKeyFile != "":
+		kf, err := os.ReadFile(c.opts.publicKeyFile)
+		if err != nil {
+			return err
+		}
+
+		kb, err := hex.DecodeString(string(kf))
+		if err != nil {
+			return err
+		}
+
+		if len(kb) != ed25519.PublicKeySize {
+			return fmt.Errorf("invalid public key")
+		}
+
+		pubKey = kb
+
+	case c.opts.seedFile != "":
+		sf, err := os.ReadFile(c.opts.seedFile)
+		if err != nil {
+			return err
+		}
+
+		sb, err := hex.DecodeString(string(sf))
+		if err != nil {
+			return err
+		}
+
+		if len(sb) != ed25519.SeedSize {
+			return fmt.Errorf("invalid seed length")
+		}
+
+		pk := ed25519.NewKeyFromSeed(sb)
+		defer func() {
+			io.ReadFull(rand.Reader, pk[:])
+			io.ReadFull(rand.Reader, sb[:])
+			io.ReadFull(rand.Reader, sf[:])
+		}()
+
+		pubKey = pk.Public().(ed25519.PublicKey)
+
+	default:
+		if !c.opts.optionalTaskSignatures {
+			return fmt.Errorf("no task verification keys configured")
+		}
+
+		return nil
+	}
+
+	msg, err := task.signatureMessage()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrTaskSignatureInvalid, err)
+	}
+
+	sig, err := hex.DecodeString(task.Signature)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrTaskSignatureInvalid, err)
+	}
+
+	if !ed25519.Verify(pubKey, msg, sig) {
+		return ErrTaskSignatureInvalid
+	}
+
+	return nil
+}
+
+func (c *Client) signTask(task *Task) error {
+	switch {
+	case c.opts.privateKey != nil:
+		return task.sign(c.opts.privateKey)
+
+	case c.opts.seedFile != "":
+		sf, err := os.ReadFile(c.opts.seedFile)
+		if err != nil {
+			return err
+		}
+
+		sb, err := hex.DecodeString(string(sf))
+		if err != nil {
+			return err
+		}
+
+		if len(sb) != ed25519.SeedSize {
+			return fmt.Errorf("invalid seed length")
+		}
+
+		pk := ed25519.NewKeyFromSeed(sb)
+		defer func() {
+			io.ReadFull(rand.Reader, pk[:])
+			io.ReadFull(rand.Reader, sb[:])
+			io.ReadFull(rand.Reader, sf[:])
+		}()
+
+		return task.sign(pk)
+	}
+
+	return nil
 }
 
 // StorageAdmin access admin features of the storage backend

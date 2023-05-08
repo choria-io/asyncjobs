@@ -9,7 +9,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -40,6 +39,8 @@ type taskCommand struct {
 	dependencies    []string
 	loadDepResults  bool
 	ed25519Seed     string
+	ed25519PubKey   string
+	optionalSigs    bool
 
 	limit int
 	json  bool
@@ -50,6 +51,8 @@ func configureTaskCommand(app *fisk.Application) {
 	c := &taskCommand{}
 
 	tasks := app.Command("tasks", "Manage Tasks").Alias("t").Alias("task")
+	tasks.Flag("sign", "Signs tasks using an ed25519 seed").StringVar(&c.ed25519Seed)
+	tasks.Flag("verify", "Verifies tasks using an ed25519 public key").StringVar(&c.ed25519PubKey)
 
 	add := tasks.Command("add", "Adds a new Task to a queue").Alias("new").Alias("a").Alias("enqueue").Action(c.addAction)
 	add.Arg("type", "The task type").Required().StringVar(&c.ttype)
@@ -59,7 +62,6 @@ func configureTaskCommand(app *fisk.Application) {
 	add.Flag("tries", "Sets the maximum amount of times this task may be tried").IntVar(&c.maxtries)
 	add.Flag("depends", "Sets IDs to depend on, comma sep or pass multiple times").StringsVar(&c.dependencies)
 	add.Flag("load", "Loads results from dependencies before executing task").BoolVar(&c.loadDepResults)
-	add.Flag("sign", "Signs the task using an ed25519 seed").StringVar(&c.ed25519Seed)
 
 	retry := tasks.Command("retry", "Retries delivery of a task currently in the Task Store").Action(c.retryAction)
 	retry.Arg("id", "The Task ID to view").Required().StringVar(&c.id)
@@ -106,8 +108,52 @@ func configureTaskCommand(app *fisk.Application) {
 	configureTaskCronCommand(tasks)
 }
 
+func (c *taskCommand) prepare(copts ...aj.ClientOpt) error {
+	sigOpts, err := c.clientOpts()
+	if err != nil {
+		return err
+	}
+
+	return prepare(append(copts, sigOpts...)...)
+}
+
+func (c *taskCommand) clientOpts() ([]aj.ClientOpt, error) {
+	var opts []aj.ClientOpt
+
+	if c.optionalSigs {
+		opts = append(opts, aj.TaskSignaturesOptional())
+	}
+
+	if c.ed25519Seed != "" {
+		if fileExist(c.ed25519Seed) {
+			opts = append(opts, aj.TaskSigningSeedFile(c.ed25519Seed))
+		} else {
+			seed, err := hex.DecodeString(c.ed25519Seed)
+			if err != nil {
+				return nil, err
+			}
+
+			opts = append(opts, aj.TaskSigningKey(ed25519.NewKeyFromSeed(seed)))
+		}
+	}
+
+	if c.ed25519PubKey != "" {
+		if fileExist(c.ed25519PubKey) {
+			opts = append(opts, aj.TaskVerificationKeyFile(c.ed25519PubKey))
+		} else {
+			pk, err := hex.DecodeString(c.ed25519PubKey)
+			if err != nil {
+				return nil, err
+			}
+			opts = append(opts, aj.TaskVerificationKey(pk))
+		}
+	}
+
+	return opts, nil
+}
+
 func (c *taskCommand) retryAction(_ *fisk.ParseContext) error {
-	err := prepare(aj.BindWorkQueue(c.queue))
+	err := c.prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}
@@ -121,7 +167,7 @@ func (c *taskCommand) retryAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) initAction(_ *fisk.ParseContext) error {
-	err := prepare(aj.NoStorageInit())
+	err := c.prepare(aj.NoStorageInit())
 	if err != nil {
 		return err
 	}
@@ -142,7 +188,7 @@ func (c *taskCommand) initAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) watchAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -208,7 +254,7 @@ func (c *taskCommand) processAction(_ *fisk.ParseContext) error {
 		copts = append(copts, aj.DiscardTaskStates(aj.TaskStateExpired))
 	}
 
-	err := prepare(copts...)
+	err := c.prepare(copts...)
 	if err != nil {
 		return err
 	}
@@ -227,7 +273,7 @@ func (c *taskCommand) processAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) purgeAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -260,7 +306,7 @@ func (c *taskCommand) purgeAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) configAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -291,7 +337,7 @@ func (c *taskCommand) configAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) lsAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -323,7 +369,7 @@ func (c *taskCommand) lsAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) rmAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -346,7 +392,7 @@ func (c *taskCommand) rmAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) viewAction(_ *fisk.ParseContext) error {
-	err := prepare()
+	err := c.prepare()
 	if err != nil {
 		return err
 	}
@@ -394,7 +440,7 @@ func (c *taskCommand) viewAction(_ *fisk.ParseContext) error {
 }
 
 func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
-	err := prepare(aj.BindWorkQueue(c.queue))
+	err := c.prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}
@@ -418,22 +464,6 @@ func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
 
 	if c.maxtries > 0 {
 		opts = append(opts, aj.TaskMaxTries(c.maxtries))
-	}
-
-	if c.ed25519Seed != "" {
-		var seed []byte
-		if fileExist(c.ed25519Seed) {
-			seed, err = os.ReadFile(c.ed25519Seed)
-			if err != nil {
-				return err
-			}
-		} else {
-			seed, err = hex.DecodeString(c.ed25519Seed)
-			if err != nil {
-				return err
-			}
-		}
-		opts = append(opts, aj.TaskSigner(ed25519.NewKeyFromSeed(seed)))
 	}
 
 	task, err := aj.NewTask(c.ttype, c.payload, opts...)

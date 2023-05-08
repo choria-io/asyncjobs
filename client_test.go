@@ -6,6 +6,7 @@ package asyncjobs
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -68,6 +69,76 @@ func withJetStream(cb func(nc *nats.Conn, mgr *jsm.Manager)) {
 var _ = Describe("Client", func() {
 	BeforeEach(func() {
 		log.SetOutput(GinkgoWriter)
+	})
+
+	Describe("SignedTasks", func() {
+		var pubk ed25519.PublicKey
+		var prik ed25519.PrivateKey
+		var err error
+
+		BeforeEach(func() {
+			pubk, prik, err = ed25519.GenerateKey(nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Should sign messages", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc), TaskSigningKey(prik), TaskVerificationKey(pubk))
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("x", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
+
+				Expect(task.Signature).To(HaveLen(128))
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.Signature).To(HaveLen(128))
+			})
+		})
+
+		It("Should verify loaded tasks", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc), TaskSigningKey(prik), TaskVerificationKey(pubk))
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("x", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
+
+				client.opts.publicKey, _, err = ed25519.GenerateKey(nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).To(MatchError(ErrTaskSignatureInvalid))
+				Expect(task).To(BeNil())
+			})
+		})
+
+		It("Should support loading signed and unsigned messages", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				client, err := NewClient(NatsConn(nc), TaskVerificationKey(pubk))
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("x", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
+
+				id := task.ID
+				_, err = client.LoadTaskByID(id)
+
+				// all tasks should be signed by default
+				Expect(err).To(MatchError(ErrTaskNotSigned))
+
+				// but can be disabled
+				Expect(TaskSignaturesOptional()(client.opts)).To(Succeed())
+
+				task, err = client.LoadTaskByID(id)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task).ToNot(BeNil())
+			})
+		})
 	})
 
 	Describe("DiscardTaskStatesByName", func() {

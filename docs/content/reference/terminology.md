@@ -1,7 +1,7 @@
 +++
 title = "Terminology"
 toc = true
-weight = 50
+weight = 60
 +++
 
 Several terms are used in this system as outlined here.
