@@ -26,6 +26,8 @@ type Package struct {
 	RetryPolicy string `yaml:"retry"`
 	// DiscardStates indicates what termination states to discard
 	DiscardStates []string `yaml:"discard"`
+	// TaskSignaturesOptional allows unsigned tasks to be used when AJ_VERIFICATION_KEY is set
+	TaskSignaturesOptional bool `yaml:"task_signatures_optional"`
 }
 
 // TaskHandler is an individual Task Handler

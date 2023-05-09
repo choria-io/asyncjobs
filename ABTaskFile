@@ -136,3 +136,38 @@ commands:
               description: The port to listen on
               default: "8081"
           command: hugo serve -p {{ .Flags.port }} -s docs
+
+    - name: build
+      type: parent
+      description: Code build steps
+      aliases: ["b"]
+      commands:
+        - name: binary
+          description: Build a basic test binary
+          type: exec
+          dir: "{{ TaskDir }}"
+          banner: |
+            >>>
+            >>> Building 'ajc' {{ if .Flags.target }}for target '{{ .Flags.target }}'{{ end }}
+            >>>
+          flags:
+            - name: target
+              description: Target platform to build for
+              enum: ["linux/amd64"]
+              short: T
+          script: |
+            {{ if eq .Flags.target "linux/amd64" }}
+                export GOOS=linux
+                export GOARCH=amd64
+            {{ end }}
+
+            cd ajc
+            go build -o ajc
+            ls -l ajc
+
+        - name: snapshot
+          description: Goreleaser snapshot
+          type: exec
+          dir: "{{ TaskDir }}"
+          script: |
+            goreleaser release --snapshot --clean
