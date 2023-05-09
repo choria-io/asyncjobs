@@ -40,6 +40,7 @@ The following Environment variables are supported:
  - AJ_NATS_CONTEXT: The name of a NATS Context to use for connections
  - AJ_CONCURRENCY: The number of concurrent handlers that can be run
  - AJ_RETRY_POLICY: The retry policy to use [{{ RetryNamesList }}]
+ - AJ_VERIFICATION_KEY: A hex encoded ed25519 public key that will verify job signatures
 
 Prometheus statistics are Exposed on port http://0.0.0.0:8080/metrics
 
@@ -103,6 +104,9 @@ func main() {
 		retryPolicy = "{{ .Package.RetryPolicy }}"
 	}
 
+	verificationKey := os.Getenv("AJ_VERIFICATION_KEY")
+	sigsOptional := "{{ .Package.TaskSignaturesOptional }}" == ""
+
 	log := logrus.NewEntry(logger)
 
 	log.Printf("Choria Async Jobs Handler Service {{.Package.Name}} build settings")
@@ -110,6 +114,10 @@ func main() {
 	log.Printf("Work Queue: %s", wq)
 	log.Printf("Concurrency: %d", concurrency)
 	log.Printf("Retry Policy: %s", retryPolicy)
+	if verificationKey != "" {
+		log.Printf("Verification Key: %s", verificationKey)
+		log.Printf("Verification Optional: %t", sigsOptional)
+	}
 {{- range $state := .Package.DiscardStates }}
 	log.Printf("Discard State: {{$state}}")
 {{- end }}
@@ -122,6 +130,10 @@ func main() {
 		aj.ClientConcurrency(concurrency),
 		aj.CustomLogger(log),
 		aj.RetryBackoffPolicyName(retryPolicy),
+		aj.TaskVerificationKeyHexEncoded(verificationKey),
+{{- if .Package.TaskSignaturesOptional }}
+		aj.TaskSignaturesOptional(),
+{{- end }}
 {{- range $state := .Package.DiscardStates }}
 		aj.DiscardTaskStatesByName("{{$state}}"),
 {{- end }}

@@ -6,6 +6,7 @@ package asyncjobs
 
 import (
 	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -268,6 +269,23 @@ func TaskSigningKey(pk ed25519.PrivateKey) ClientOpt {
 func TaskSigningSeedFile(sf string) ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.seedFile = sf
+		return nil
+	}
+}
+
+// TaskVerificationKeyHexEncoded sets a public key used to verify tasks, hex encoded string
+func TaskVerificationKeyHexEncoded(pks string) ClientOpt {
+	return func(opts *ClientOpts) error {
+		if pks == "" {
+			return nil
+		}
+
+		pk, err := hex.DecodeString(pks)
+		if err != nil {
+			return err
+		}
+
+		opts.publicKey = pk
 		return nil
 	}
 }
