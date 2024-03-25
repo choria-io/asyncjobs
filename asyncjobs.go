@@ -11,6 +11,7 @@ import (
 
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -40,7 +41,7 @@ type StorageAdmin interface {
 	TasksInfo() (*TasksInfo, error)
 	Tasks(ctx context.Context, limit int32) (chan *Task, error)
 	TasksStore() (*jsm.Manager, *jsm.Stream, error)
-	ElectionStorage() (nats.KeyValue, error)
+	ElectionStorage() (jetstream.KeyValue, error)
 }
 
 type ScheduledTaskStorage interface {
@@ -50,7 +51,7 @@ type ScheduledTaskStorage interface {
 	ScheduledTasks(ctx context.Context) ([]*ScheduledTask, error)
 	ScheduledTasksWatch(ctx context.Context) (chan *ScheduleWatchEntry, error)
 	EnqueueTask(ctx context.Context, queue *Queue, task *Task) error
-	ElectionStorage() (nats.KeyValue, error)
+	ElectionStorage() (jetstream.KeyValue, error)
 	PublishLeaderElectedEvent(ctx context.Context, name string, component string) error
 }
 

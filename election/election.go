@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Backoff controls the interval of campaigns
@@ -68,7 +68,7 @@ type election struct {
 
 var skipValidate bool
 
-func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) (Election, error) {
+func NewElection(name string, key string, bucket jetstream.KeyValue, opts ...Option) (Election, error) {
 	e := &election{
 		state:   UnknownState,
 		lastSeq: math.MaxUint64,
@@ -79,7 +79,7 @@ func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) 
 		},
 	}
 
-	status, err := bucket.Status()
+	status, err := bucket.Status(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (e *election) debugf(format string, a ...any) {
 func (e *election) campaignForLeadership() error {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[CandidateState]).Inc()
 
-	seq, err := e.opts.bucket.Create(e.opts.key, []byte(e.opts.name))
+	seq, err := e.opts.bucket.Create(context.TODO(), e.opts.key, []byte(e.opts.name))
 	if err != nil {
 		e.tries++
 		return nil
@@ -139,7 +139,7 @@ func (e *election) campaignForLeadership() error {
 func (e *election) maintainLeadership() error {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[LeaderState]).Inc()
 
-	seq, err := e.opts.bucket.Update(e.opts.key, []byte(e.opts.name), e.lastSeq)
+	seq, err := e.opts.bucket.Update(context.TODO(), e.opts.key, []byte(e.opts.name), e.lastSeq)
 	if err != nil {
 		e.debugf("key update failed, moving to candidate state: %v", err)
 		e.state = CandidateState

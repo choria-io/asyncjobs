@@ -105,10 +105,6 @@ func CustomLogger(log Logger) ClientOpt {
 // NatsConn sets an already connected NATS connection as communications channel
 func NatsConn(nc *nats.Conn) ClientOpt {
 	return func(opts *ClientOpts) error {
-		if !nc.Opts.UseOldRequestStyle {
-			return fmt.Errorf("connection with UseOldRequestStyle() is required")
-		}
-
 		opts.nc = nc
 		return nil
 	}
