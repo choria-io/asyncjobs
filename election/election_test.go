@@ -14,6 +14,7 @@ import (
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -27,8 +28,8 @@ var _ = Describe("Leader Election", func() {
 	var (
 		srv      *server.Server
 		nc       *nats.Conn
-		js       nats.KeyValueManager
-		kv       nats.KeyValue
+		js       jetstream.KeyValueManager
+		kv       jetstream.KeyValue
 		err      error
 		debugger func(f string, a ...any)
 	)
@@ -36,10 +37,8 @@ var _ = Describe("Leader Election", func() {
 	BeforeEach(func() {
 		skipValidate = false
 		srv, nc = startJSServer(GinkgoT())
-		js, err = nc.JetStream()
-		Expect(err).ToNot(HaveOccurred())
 
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		kv, err = js.CreateKeyValue(context.TODO(), jetstream.KeyValueConfig{
 			Bucket: "LEADER_ELECTION",
 			TTL:    750 * time.Millisecond,
 		})
@@ -60,7 +59,7 @@ var _ = Describe("Leader Election", func() {
 
 	Describe("Election", func() {
 		It("Should validate the TTL", func() {
-			kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
+			kv, err := js.CreateKeyValue(context.TODO(), jetstream.KeyValueConfig{
 				Bucket: "LE",
 				TTL:    24 * time.Hour,
 			})
@@ -174,10 +173,10 @@ var _ = Describe("Leader Election", func() {
 				kills++
 				if kills%3 == 0 {
 					debugger("deleting key")
-					Expect(kv.Delete("election")).ToNot(HaveOccurred())
+					Expect(kv.Delete(context.TODO(), "election")).ToNot(HaveOccurred())
 				} else {
 					debugger("corrupting key")
-					_, err := kv.Put("election", nil)
+					_, err := kv.Put(context.TODO(), "election", nil)
 					Expect(err).ToNot(HaveOccurred())
 				}
 			}

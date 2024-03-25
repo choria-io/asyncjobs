@@ -157,7 +157,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = storage.configBucket.Put("scheduled_tasks.test", []byte("{invalid"))
+				_, err = storage.configBucket.Put(context.TODO(), "scheduled_tasks.test", []byte("{invalid"))
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = storage.LoadScheduledTaskByName("test")
@@ -215,7 +215,7 @@ var _ = Describe("Storage", func() {
 				err = storage.SaveScheduledTask(st, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				e, err := storage.configBucket.Get(fmt.Sprintf("scheduled_tasks.%s", st.Name))
+				e, err := storage.configBucket.Get(context.TODO(), fmt.Sprintf("scheduled_tasks.%s", st.Name))
 				Expect(err).ToNot(HaveOccurred())
 				st = &ScheduledTask{}
 				err = json.Unmarshal(e.Value(), st)
@@ -253,7 +253,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				kvs, err := storage.configBucket.Status()
+				kvs, err := storage.configBucket.Status(context.TODO())
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config.Storage).To(Equal(nats.MemoryStorage))
@@ -268,7 +268,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(false, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				kvs, err := storage.configBucket.Status()
+				kvs, err := storage.configBucket.Status(context.TODO())
 				Expect(err).ToNot(HaveOccurred())
 				stream := kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config
 				Expect(stream.MaxMsgsPerSubject).To(Equal(int64(1)))

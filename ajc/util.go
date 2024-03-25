@@ -17,6 +17,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 	"github.com/xlab/tablewriter"
 	"golang.org/x/term"
@@ -167,8 +168,8 @@ func showTasks(tasks *asyncjobs.TasksInfo) {
 	}
 }
 
-func showElectionStatus(kv nats.KeyValue) {
-	status, err := kv.Status()
+func showElectionStatus(kv jetstream.KeyValue) {
+	status, err := kv.Status(context.TODO())
 	if err != nil {
 		return
 	}
@@ -195,7 +196,7 @@ func showElectionStatus(kv nats.KeyValue) {
 	}
 
 	for _, k := range keys {
-		entry, err := kv.Get(k)
+		entry, err := kv.Get(context.TODO(), k)
 		if err != nil {
 			fmt.Printf("                  Could not get value for %v: %v", k, err)
 		}
