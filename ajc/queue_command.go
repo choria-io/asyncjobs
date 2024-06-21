@@ -44,7 +44,7 @@ func configureQueueCommand(app *fisk.Application) {
   add.Flag("memory", "Store the Queue in memory").BoolVar(&c.memory)
   add.Flag("replicas", "Number of storage replicas to configure").Default("1").IntVar(&c.replicas)
   add.Flag("discard-old", "When full, discard old entries").BoolVar(&c.discardOld)
-  add.Flag("max-bytes", "Maximum bytes that can be stored in the queue, -1 for unlimited").Default("-1").Int64Var(&c.maxBytes)
+  add.Flag("max-bytes", "Maximum bytes that can be stored in the queue, defaults to 10Mb").Default(fmt.Sprintf("%d", asyncjobs.DefaultMaxBytes)).Int64Var(&c.maxBytes)
 
   queues.Command("list", "List Queues").Alias("ls").Action(c.lsAction)
 
@@ -67,7 +67,7 @@ func configureQueueCommand(app *fisk.Application) {
   cfg.Flag("run-time", "Maximum run-time to allow per task").Default("-1s").DurationVar(&c.maxTime)
   cfg.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default("-2").IntVar(&c.maxConcurrent)
   cfg.Flag("replicas", "Number of storage replicas to configure").Default("-1").IntVar(&c.replicas)
-  cfg.Flag("max-bytes", "Maximum bytes that can be stored in the queue, -1 for unlimited").Default("-1").Int64Var(&c.maxBytes)
+  cfg.Flag("max-bytes", "Maximum bytes that can be stored in the queue, defaults to 10mb").Default(fmt.Sprintf("%d", asyncjobs.DefaultMaxBytes)).Int64Var(&c.maxBytes)
 }
 
 func (c *queueCommand) addAction(_ *fisk.ParseContext) error {
