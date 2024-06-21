@@ -30,6 +30,8 @@ type Queue struct {
 	MaxConcurrent int `json:"max_concurrent"`
 	// NoCreate will not try to create a queue, will bind to an existing one or fail
 	NoCreate bool
+	// MaxBytes is the maximum amount of bytes that can be stored in the queue
+	MaxBytes int64 `json:"max_bytes"`
 
 	mu      sync.Mutex
 	storage Storage

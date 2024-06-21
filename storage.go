@@ -417,6 +417,9 @@ func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) erro
 	} else {
 		opts = append(opts, jsm.DiscardNew())
 	}
+	if q.MaxBytes > -1 {
+		opts = append(opts, jsm.MaxBytes(q.MaxBytes))
+	}
 
 	var err error
 
