@@ -541,7 +541,7 @@ func (s *jetStreamStorage) DeleteTaskByID(id string) error {
 		return err
 	}
 
-	return s.tasks.stream.DeleteMessage(msg.Sequence)
+	return s.tasks.stream.DeleteMessageRequest(api.JSApiMsgDeleteRequest{Seq: msg.Sequence})
 }
 
 func (s *jetStreamStorage) LoadTaskByID(id string) (*Task, error) {
