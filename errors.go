@@ -34,6 +34,8 @@ var (
 	ErrTaskTypeRequired = fmt.Errorf("task type is required")
 	// ErrTaskTypeInvalid indicates an invalid task type was given
 	ErrTaskTypeInvalid = fmt.Errorf("task type is invalid")
+	// ErrTaskIDInvalid indicates an invalid ID type was given
+	ErrTaskIDInvalid = fmt.Errorf("task ID is invalid")
 	// ErrTaskDependenciesFailed indicates that the task cannot be run as its dependencies failed
 	ErrTaskDependenciesFailed = fmt.Errorf("task dependencies failed")
 	// ErrTaskAlreadySigned indicates a task is already signed

@@ -152,6 +152,10 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 		}
 	}
 
+	if !IsValidName(t.ID) {
+		return nil, fmt.Errorf("%w: must match %s", ErrTaskIDInvalid, validNameMatcher)
+	}
+
 	if len(t.Dependencies) > 0 {
 		t.State = TaskStateBlocked
 	}
