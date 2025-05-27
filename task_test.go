@@ -117,18 +117,8 @@ var _ = Describe("Tasks", func() {
 				err = storage.PrepareTasks(true, 1, time.Hour)
 				Expect(err).ToNot(HaveOccurred())
 
-				task, err := NewTask("test", nil, CustomIDGenerator)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(task.ID).ToNot(HaveLen(0))
-				Expect(task.ID).To(Equal("my.invalid.custom.id"))
-
-				err = storage.EnqueueTask(ctx, q, task)
-				Expect(err).ToNot(HaveOccurred()) // TODO: test fails here because custom ID has invalid characters
-
-				t, err := storage.LoadTaskByID(task.ID)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(t.ID).To(Equal(task.ID))
-				Expect(task.ID).To(Equal("my.invalid.custom.id"))
+				_, err = NewTask("test", nil, CustomIDGenerator)
+				Expect(err).To(MatchError(ErrTaskIDInvalid))
 			})
 		})
 
