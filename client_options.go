@@ -31,6 +31,8 @@ type ClientOpts struct {
 	publicKey              ed25519.PublicKey
 	publicKeyFile          string
 	optionalTaskSignatures bool
+	maxBytes               int64
+	maxBytesSet            bool
 
 	nc *nats.Conn
 }
@@ -310,6 +312,14 @@ func TaskVerificationKeyFile(sf string) ClientOpt {
 func TaskSignaturesOptional() ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.optionalTaskSignatures = true
+		return nil
+	}
+}
+
+func MaxBytes(maxBytes int64) ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.maxBytes = maxBytes
+		opts.maxBytesSet = true
 		return nil
 	}
 }

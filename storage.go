@@ -417,6 +417,9 @@ func (s *jetStreamStorage) createQueue(q *Queue, replicas int, memory bool) erro
 	} else {
 		opts = append(opts, jsm.DiscardNew())
 	}
+	if q.MaxBytes > -1 {
+		opts = append(opts, jsm.MaxBytes(q.MaxBytes))
+	}
 
 	var err error
 
@@ -726,7 +729,7 @@ func (s *jetStreamStorage) SaveScheduledTask(st *ScheduledTask, update bool) err
 	return nil
 }
 
-func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) error {
+func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int, maxBytes int64, maxBytesSet bool) error {
 	var err error
 
 	if replicas == 0 {
@@ -745,12 +748,18 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 
 	kv, err := js.KeyValue(ConfigBucketName)
 	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		cfg := &nats.KeyValueConfig{
 			Bucket:      ConfigBucketName,
 			Description: "Choria Async Jobs Configuration",
 			Storage:     storage,
 			Replicas:    replicas,
-		})
+		}
+
+		if maxBytes > -1 {
+			cfg.MaxBytes = maxBytes
+		}
+
+		kv, err = js.CreateKeyValue(cfg)
 	}
 	if err != nil {
 		return err
@@ -760,13 +769,19 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 
 	kv, err = js.KeyValue(LeaderElectionBucketName)
 	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		cfg := &nats.KeyValueConfig{
 			Bucket:      LeaderElectionBucketName,
 			Description: "Choria Async Jobs Leader Elections",
 			Storage:     storage,
 			Replicas:    replicas,
 			TTL:         10 * time.Second,
-		})
+		}
+
+		if maxBytesSet {
+			cfg.MaxBytes = maxBytes
+		}
+
+		kv, err = js.CreateKeyValue(cfg)
 	}
 	if err != nil {
 		return err
@@ -778,7 +793,7 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 
 }
 
-func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention time.Duration) error {
+func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention time.Duration, maxBytes int64, maxBytesSet bool) error {
 	var err error
 
 	if replicas == 0 {
@@ -799,6 +814,10 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 	}
 
 	opts = append(opts, jsm.MaxAge(retention))
+
+	if maxBytesSet {
+		opts = append(opts, jsm.MaxBytes(maxBytes))
+	}
 
 	s.tasks = &taskStorage{mgr: s.mgr}
 	s.tasks.stream, err = s.mgr.LoadOrNewStream(TasksStreamName, opts...)
