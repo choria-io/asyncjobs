@@ -40,6 +40,8 @@ var (
 	ErrTaskDependenciesFailed = fmt.Errorf("task dependencies failed")
 	// ErrTaskAlreadySigned indicates a task is already signed
 	ErrTaskAlreadySigned = fmt.Errorf("task is already signed")
+	// ErrTaskPayloadEncoderAlreadySet indicates that the task already has an encoder for the payload
+	ErrTaskPayloadEncoderAlreadySet = fmt.Errorf("task payload encoder is already set")
 	// ErrTaskSignatureRequiresQueue indicates a signature request was made without configuring the queue name for a task
 	ErrTaskSignatureRequiresQueue = fmt.Errorf("signing a task requires the queue to be set")
 	// ErrTaskNotSigned indicates a task was loaded that had no signature while signatures are required

@@ -95,10 +95,9 @@ type Task struct {
 	// Signature is an ed25519 signature of key properties
 	Signature string `json:"signature,omitempty"`
 
-	// stored temporarily until encoding is done
-	rawPayload     any
-	storageOptions any
-	mu             sync.Mutex
+	payloadMarshaller TaskPayloadEncoderFunc
+	storageOptions    any
+	mu                sync.Mutex
 }
 
 // TasksInfo is state about the tasks store
@@ -132,15 +131,13 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 	}
 
 	t := &Task{
-		ID:         id.String(),
-		Type:       taskType,
-		CreatedAt:  time.Now().UTC(),
-		MaxTries:   DefaultMaxTries,
-		State:      TaskStateNew,
-		rawPayload: payload,
+		ID:        id.String(),
+		Type:      taskType,
+		CreatedAt: time.Now().UTC(),
+		MaxTries:  DefaultMaxTries,
+		State:     TaskStateNew,
 	}
 
-	opts = append(opts, TaskPayloadEncoder(json.Marshal))
 	for _, opt := range opts {
 		err = opt(t)
 		if err != nil {
@@ -148,11 +145,20 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 		}
 	}
 
-	// there is no need to keep raw payload now that Payload is encoded.
-	t.rawPayload = nil
-
 	if !IsValidName(t.ID) {
 		return nil, fmt.Errorf("%w: must match %s", ErrTaskIDInvalid, validNameMatcher)
+	}
+
+	if t.payloadMarshaller == nil {
+		t.payloadMarshaller = json.Marshal
+	}
+
+	if payload != nil {
+		p, err := t.payloadMarshaller(payload)
+		if err != nil {
+			return nil, err
+		}
+		t.Payload = p
 	}
 
 	if len(t.Dependencies) > 0 {
@@ -273,25 +279,12 @@ type TaskPayloadEncoderFunc func(any) ([]byte, error)
 
 // TaskPayloadEncoder uses the given encoder to encode the Task's Payload.
 // If not provided, json.Marshal is used as the default encoder.
-// If more than 1 encoders are provided, only the first one is used to encode the payload.
 func TaskPayloadEncoder(enc TaskPayloadEncoderFunc) TaskOpt {
 	return func(t *Task) error {
-		// no payload to work with
-		if t.rawPayload == nil {
-			return nil
+		if t.payloadMarshaller != nil {
+			return ErrTaskPayloadEncoderAlreadySet
 		}
-
-		// payload already encoded, so we skip
-		if t.Payload != nil {
-			return nil
-		}
-
-		payload, err := enc(t.rawPayload)
-		if err != nil {
-			return err
-		}
-
-		t.Payload = payload
+		t.payloadMarshaller = enc
 		return nil
 	}
 }

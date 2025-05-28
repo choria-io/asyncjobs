@@ -138,7 +138,6 @@ var _ = Describe("Tasks", func() {
 			task, err := NewTask("test", payload)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.Payload).To(MatchJSON(payloadJson))
-			Expect(task.rawPayload).To(BeNil())
 		})
 
 		It("Uses custom encoder when provided", func() {
@@ -151,7 +150,6 @@ var _ = Describe("Tasks", func() {
 			task, err := NewTask("test", payload, TaskPayloadEncoder(customEncoder))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.Payload).To(Equal([]byte(encodedValue)))
-			Expect(task.rawPayload).To(BeNil())
 		})
 
 		It("Fails if custom encoder returns error", func() {
@@ -160,14 +158,26 @@ var _ = Describe("Tasks", func() {
 			}
 
 			_, err := NewTask("test", "bad", TaskPayloadEncoder(customEncoder))
+			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError("encode error"))
+		})
+
+		It("Fails if multiple encoders are provided", func() {
+			customEncoder := func(v any) ([]byte, error) {
+				return []byte(`"first"`), nil
+			}
+			anotherEncoder := func(v any) ([]byte, error) {
+				return []byte(`"second"`), nil
+			}
+			_, err := NewTask("test", "payload", TaskPayloadEncoder(customEncoder), TaskPayloadEncoder(anotherEncoder))
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(ErrTaskPayloadEncoderAlreadySet))
 		})
 
 		It("Skips encoding if payload is nil", func() {
 			task, err := NewTask("test", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.Payload).To(BeNil())
-			Expect(task.rawPayload).To(BeNil())
 		})
 	})
 })
