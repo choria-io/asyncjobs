@@ -2,6 +2,8 @@ package asyncjobs
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -122,5 +124,50 @@ var _ = Describe("Tasks", func() {
 			})
 		})
 
+	})
+
+	Describe("NewTaskWithPayloadEncoder", func() {
+		type samplePayload struct {
+			Foo string `json:"foo"`
+			Bar int    `json:"bar"`
+		}
+
+		It("Uses default JSON encoding when no custom encoder is provided", func() {
+			payload := samplePayload{Foo: "baz", Bar: 3}
+			payloadJson, _ := json.Marshal(payload)
+			task, err := NewTask("test", payload)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(task.Payload).To(MatchJSON(payloadJson))
+			Expect(task.rawPayload).To(BeNil())
+		})
+
+		It("Uses custom encoder when provided", func() {
+			const encodedValue = `"custom-encoded"`
+			customEncoder := func(v any) ([]byte, error) {
+				return []byte(encodedValue), nil
+			}
+
+			payload := samplePayload{Foo: "bar"}
+			task, err := NewTask("test", payload, TaskPayloadEncoder(customEncoder))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(task.Payload).To(Equal([]byte(encodedValue)))
+			Expect(task.rawPayload).To(BeNil())
+		})
+
+		It("Fails if custom encoder returns error", func() {
+			customEncoder := func(v any) ([]byte, error) {
+				return nil, errors.New("encode error")
+			}
+
+			_, err := NewTask("test", "bad", TaskPayloadEncoder(customEncoder))
+			Expect(err).To(MatchError("encode error"))
+		})
+
+		It("Skips encoding if payload is nil", func() {
+			task, err := NewTask("test", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(task.Payload).To(BeNil())
+			Expect(task.rawPayload).To(BeNil())
+		})
 	})
 })
