@@ -95,8 +95,9 @@ type Task struct {
 	// Signature is an ed25519 signature of key properties
 	Signature string `json:"signature,omitempty"`
 
-	storageOptions any
-	mu             sync.Mutex
+	payloadMarshaller TaskPayloadEncoderFunc
+	storageOptions    any
+	mu                sync.Mutex
 }
 
 // TasksInfo is state about the tasks store
@@ -137,14 +138,6 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 		State:     TaskStateNew,
 	}
 
-	if payload != nil {
-		p, err := json.Marshal(payload)
-		if err != nil {
-			return nil, err
-		}
-		t.Payload = p
-	}
-
 	for _, opt := range opts {
 		err = opt(t)
 		if err != nil {
@@ -154,6 +147,18 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 
 	if !IsValidName(t.ID) {
 		return nil, fmt.Errorf("%w: must match %s", ErrTaskIDInvalid, validNameMatcher)
+	}
+
+	if t.payloadMarshaller == nil {
+		t.payloadMarshaller = json.Marshal
+	}
+
+	if payload != nil {
+		p, err := t.payloadMarshaller(payload)
+		if err != nil {
+			return nil, err
+		}
+		t.Payload = p
 	}
 
 	if len(t.Dependencies) > 0 {
@@ -265,6 +270,21 @@ func TaskDependsOn(tasks ...*Task) TaskOpt {
 func TaskRequiresDependencyResults() TaskOpt {
 	return func(t *Task) error {
 		t.LoadDependencies = true
+		return nil
+	}
+}
+
+// TaskPayloadEncoderFunc is the implementation of the encoder used to encode the Task's Payload
+type TaskPayloadEncoderFunc func(any) ([]byte, error)
+
+// TaskPayloadEncoder uses the given encoder to encode the Task's Payload.
+// If not provided, json.Marshal is used as the default encoder.
+func TaskPayloadEncoder(enc TaskPayloadEncoderFunc) TaskOpt {
+	return func(t *Task) error {
+		if t.payloadMarshaller != nil {
+			return ErrTaskPayloadEncoderAlreadySet
+		}
+		t.payloadMarshaller = enc
 		return nil
 	}
 }
