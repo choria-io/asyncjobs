@@ -42,7 +42,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				wctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -61,7 +61,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				for i := 0; i < 2; i++ {
@@ -114,7 +114,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				tasks, err := storage.ScheduledTasks(ctx)
@@ -128,7 +128,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				for i := 0; i < 10; i++ {
@@ -154,7 +154,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = storage.configBucket.Put("scheduled_tasks.test", []byte("{invalid"))
@@ -170,7 +170,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = storage.LoadScheduledTaskByName("test")
@@ -183,7 +183,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
@@ -206,7 +206,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
@@ -229,7 +229,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				st, _, err := newScheduledTask("daily", "@daily", "DEFAULT", "email:new", nil)
@@ -250,7 +250,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(true, 1)
+				err = storage.PrepareConfigurationStore(true, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				kvs, err := storage.configBucket.Status()
@@ -265,7 +265,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareConfigurationStore(false, 1)
+				err = storage.PrepareConfigurationStore(false, 1, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				kvs, err := storage.configBucket.Status()
@@ -283,7 +283,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(storage.tasks.stream.Storage()).To(Equal(api.MemoryStorage))
@@ -295,7 +295,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(storage.tasks.stream.MaxAge()).To(Equal(time.Hour))
@@ -307,7 +307,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(false, 1, 0)
+				err = storage.PrepareTasks(false, 1, 0, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				stream := storage.tasks.stream
@@ -329,7 +329,7 @@ var _ = Describe("Storage", func() {
 				q := testQueue()
 				err = storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task1, err := NewTask("ginkgo", "test")
@@ -577,7 +577,7 @@ var _ = Describe("Storage", func() {
 				q := testQueue()
 				err = storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", "test")
@@ -616,7 +616,7 @@ var _ = Describe("Storage", func() {
 				q := testQueue()
 				err = storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -647,7 +647,7 @@ var _ = Describe("Storage", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 
 				nfo, err := storage.TasksInfo()
 				Expect(err).ToNot(HaveOccurred())
@@ -666,7 +666,7 @@ var _ = Describe("Storage", func() {
 
 				q1 := &Queue{Name: "Q1"}
 				Expect(storage.PrepareQueue(q1, 1, true)).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 
 				task, err := NewTask("x", "x")
 				Expect(err).ToNot(HaveOccurred())
@@ -693,7 +693,7 @@ var _ = Describe("Storage", func() {
 
 				q1 := &Queue{Name: "Q1"}
 				Expect(storage.PrepareQueue(q1, 1, true)).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 
 				task, err := NewTask("x", "x")
 				Expect(err).ToNot(HaveOccurred())
@@ -761,7 +761,7 @@ var _ = Describe("Storage", func() {
 				q := testQueue()
 				err = storage.PrepareQueue(q, 1, true)
 				Expect(err).ToNot(HaveOccurred())
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -795,7 +795,7 @@ var _ = Describe("Storage", func() {
 
 				q := testQueue()
 
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 				Expect(storage.RetryTaskByID(context.Background(), q, "123")).To(Equal(ErrTaskNotFound))
 			})
 		})
@@ -807,7 +807,7 @@ var _ = Describe("Storage", func() {
 
 				q := testQueue()
 				Expect(storage.PrepareQueue(q, 1, true)).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -856,7 +856,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				q := testQueue()
@@ -882,7 +882,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				q := testQueue()
@@ -907,7 +907,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				q := testQueue()
@@ -957,7 +957,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)
@@ -982,7 +982,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)
@@ -1023,7 +1023,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)
@@ -1046,7 +1046,7 @@ var _ = Describe("Storage", func() {
 			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(storage.PrepareTasks(true, 1, time.Hour)).ToNot(HaveOccurred())
+				Expect(storage.PrepareTasks(true, 1, time.Hour, -1, false)).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -1071,7 +1071,7 @@ var _ = Describe("Storage", func() {
 				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = storage.PrepareTasks(true, 1, time.Hour)
+				err = storage.PrepareTasks(true, 1, time.Hour, -1, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				task, err := NewTask("ginkgo", nil)

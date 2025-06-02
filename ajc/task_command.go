@@ -41,6 +41,8 @@ type taskCommand struct {
 	ed25519Seed     string
 	ed25519PubKey   string
 	optionalSigs    bool
+	maxBytes        int64
+	maxBytesSet     bool
 
 	limit int
 	json  bool
@@ -85,6 +87,7 @@ func configureTaskCommand(app *fisk.Application) {
 	init.Flag("memory", "Use memory as a storage backend").BoolVar(&c.memory)
 	init.Flag("retention", "Sets how long Tasks are kept in the Task Store").DurationVar(&c.retention)
 	init.Flag("replicas", "How many replicas to keep in a JetStream cluster").Default("1").IntVar(&c.replicas)
+	init.Flag("max-bytes", "Maximum bytes that can be stored in the queue, -1 for unlimited").Default("-1").IsSetByUser(&c.maxBytesSet).Int64Var(&c.maxBytes)
 
 	config := tasks.Command("configure", "Configures the Task storage").Alias("config").Alias("cfg").Action(c.configAction)
 	config.Arg("retention", "Sets how long Tasks are kept in the Task Store").Required().DurationVar(&c.retention)
@@ -172,7 +175,7 @@ func (c *taskCommand) initAction(_ *fisk.ParseContext) error {
 		return err
 	}
 
-	err = admin.PrepareTasks(c.memory, c.replicas, c.retention)
+	err = admin.PrepareTasks(c.memory, c.replicas, c.retention, c.maxBytes, c.maxBytesSet)
 	if err != nil {
 		return err
 	}

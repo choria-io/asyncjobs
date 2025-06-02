@@ -290,12 +290,12 @@ func (c *Client) startPrometheus() {
 }
 
 func (c *Client) setupStreams() error {
-	err := c.storage.PrepareTasks(c.opts.memoryStore, c.opts.replicas, c.opts.taskRetention)
+	err := c.storage.PrepareTasks(c.opts.memoryStore, c.opts.replicas, c.opts.taskRetention, c.opts.maxBytes, c.opts.maxBytesSet)
 	if err != nil {
 		return err
 	}
 
-	return c.storage.PrepareConfigurationStore(c.opts.memoryStore, c.opts.replicas)
+	return c.storage.PrepareConfigurationStore(c.opts.memoryStore, c.opts.replicas, c.opts.maxBytes, c.opts.maxBytesSet)
 }
 
 func nowPointer() *time.Time {

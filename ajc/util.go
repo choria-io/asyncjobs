@@ -209,6 +209,7 @@ func showQueue(q *asyncjobs.QueueInfo) {
 	fmt.Printf("    Memory Based: %t\n", q.Stream.Config.Storage == api.MemoryStorage)
 	fmt.Printf("        Replicas: %d\n", q.Stream.Config.Replicas)
 	fmt.Printf("  Archive Period: %s\n", humanizeDuration(q.Stream.Config.MaxAge))
+	fmt.Printf("       Max Bytes: %d\n", q.Stream.Config.MaxBytes)
 	fmt.Printf("  Max Task Tries: %d\n", q.Consumer.Config.MaxDeliver)
 	fmt.Printf("    Max Run Time: %s\n", humanizeDuration(q.Consumer.Config.AckWait))
 	fmt.Printf("  Max Concurrent: %d\n", q.Consumer.Config.MaxAckPending)
