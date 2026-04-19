@@ -15,6 +15,7 @@ import (
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -28,8 +29,8 @@ var _ = Describe("Leader Election", func() {
 	var (
 		srv      *server.Server
 		nc       *nats.Conn
-		js       nats.KeyValueManager
-		kv       nats.KeyValue
+		js       jetstream.JetStream
+		kv       jetstream.KeyValue
 		err      error
 		debugger func(f string, a ...any)
 	)
@@ -38,10 +39,10 @@ var _ = Describe("Leader Election", func() {
 		skipValidate = false
 		skipSplay = false
 		srv, nc = startJSServer(GinkgoT())
-		js, err = nc.JetStream()
+		js, err = jetstream.New(nc)
 		Expect(err).ToNot(HaveOccurred())
 
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		kv, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 			Bucket: "LEADER_ELECTION",
 			TTL:    750 * time.Millisecond,
 		})
@@ -62,7 +63,7 @@ var _ = Describe("Leader Election", func() {
 
 	Describe("Election", func() {
 		It("Should validate the TTL", func() {
-			kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
+			kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 				Bucket: "LE",
 				TTL:    24 * time.Hour,
 			})
@@ -180,10 +181,10 @@ var _ = Describe("Leader Election", func() {
 				kills++
 				if kills%3 == 0 {
 					debugger("deleting key")
-					Expect(kv.Delete("election")).ToNot(HaveOccurred())
+					Expect(kv.Delete(ctx, "election")).ToNot(HaveOccurred())
 				} else {
 					debugger("corrupting key")
-					_, err := kv.Put("election", nil)
+					_, err := kv.Put(ctx, "election", nil)
 					Expect(err).ToNot(HaveOccurred())
 				}
 			}
@@ -294,6 +295,9 @@ var _ = Describe("Leader Election", func() {
 				sabotageDone = make(chan struct{})
 			)
 
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
 			elect, err := NewElection("n1", "preannounce.key", kv,
 				OnWon(func() { atomic.AddInt32(&wins, 1) }),
 				OnLost(func() { atomic.AddInt32(&losses, 1) }),
@@ -304,7 +308,7 @@ var _ = Describe("Leader Election", func() {
 					// fire OnLost because OnWon was never announced.
 					if state == LeaderState && atomic.CompareAndSwapInt32(&leaderSeen, 0, 1) {
 						sabotageOnce.Do(func() {
-							Expect(kv.Delete("preannounce.key")).ToNot(HaveOccurred())
+							Expect(kv.Delete(ctx, "preannounce.key")).ToNot(HaveOccurred())
 							close(sabotageDone)
 						})
 					}
@@ -312,8 +316,6 @@ var _ = Describe("Leader Election", func() {
 				WithDebug(debugger))
 			Expect(err).ToNot(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
 			go func() { elect.Start(ctx) }()
 
 			Eventually(sabotageDone, 3*time.Second).Should(BeClosed())

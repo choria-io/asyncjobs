@@ -7,7 +7,7 @@ package election
 import (
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Option configures the election system
@@ -16,7 +16,7 @@ type Option func(o *options)
 type options struct {
 	name       string
 	key        string
-	bucket     nats.KeyValue
+	bucket     jetstream.KeyValue
 	ttl        time.Duration
 	cInterval  time.Duration
 	wonCb      func()

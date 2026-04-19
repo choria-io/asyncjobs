@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/textproto"
@@ -20,6 +21,7 @@ import (
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -66,10 +68,11 @@ var defaultBlockedNakTime = 5 * time.Second
 type jetStreamStorage struct {
 	nc  *nats.Conn
 	mgr *jsm.Manager
+	js  jetstream.JetStream
 
 	tasks           *taskStorage
 	configBucket    nats.KeyValue
-	leaderElections nats.KeyValue
+	leaderElections jetstream.KeyValue
 	retry           RetryPolicyProvider
 
 	qStreams   map[string]*jsm.Stream
@@ -105,6 +108,11 @@ func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*je
 	}
 
 	s.mgr, err = jsm.New(nc)
+	if err != nil {
+		return nil, err
+	}
+
+	s.js, err = jetstream.New(nc)
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +741,7 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 		replicas = 1
 	}
 
-	js, err := s.nc.JetStream()
+	legacyJS, err := s.nc.JetStream()
 	if err != nil {
 		return err
 	}
@@ -743,9 +751,9 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 		storage = nats.MemoryStorage
 	}
 
-	kv, err := js.KeyValue(ConfigBucketName)
+	kv, err := legacyJS.KeyValue(ConfigBucketName)
 	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		kv, err = legacyJS.CreateKeyValue(&nats.KeyValueConfig{
 			Bucket:      ConfigBucketName,
 			Description: "Choria Async Jobs Configuration",
 			Storage:     storage,
@@ -758,12 +766,20 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 
 	s.configBucket = kv
 
-	kv, err = js.KeyValue(LeaderElectionBucketName)
-	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	jsStorage := jetstream.FileStorage
+	if memory {
+		jsStorage = jetstream.MemoryStorage
+	}
+
+	ekv, err := s.js.KeyValue(ctx, LeaderElectionBucketName)
+	if errors.Is(err, jetstream.ErrBucketNotFound) {
+		ekv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 			Bucket:      LeaderElectionBucketName,
 			Description: "Choria Async Jobs Leader Elections",
-			Storage:     storage,
+			Storage:     jsStorage,
 			Replicas:    replicas,
 			TTL:         10 * time.Second,
 		})
@@ -772,7 +788,7 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 		return err
 	}
 
-	s.leaderElections = kv
+	s.leaderElections = ekv
 
 	return nil
 
@@ -908,7 +924,7 @@ func (s *jetStreamStorage) TasksStore() (*jsm.Manager, *jsm.Stream, error) {
 }
 
 // ElectionStorage gives access to the key-value store used for elections
-func (s *jetStreamStorage) ElectionStorage() (nats.KeyValue, error) {
+func (s *jetStreamStorage) ElectionStorage() (jetstream.KeyValue, error) {
 	if s.leaderElections == nil {
 		return nil, fmt.Errorf("%s: election bucket not configured", ErrStorageNotReady)
 	}

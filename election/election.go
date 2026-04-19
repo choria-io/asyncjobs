@@ -40,13 +40,14 @@ package election
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Backoff controls the interval of campaigns
@@ -107,7 +108,7 @@ var (
 	skipSplay    bool
 )
 
-func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) (Election, error) {
+func NewElection(name string, key string, bucket jetstream.KeyValue, opts ...Option) (Election, error) {
 	e := &election{
 		state:   UnknownState,
 		lastSeq: math.MaxUint64,
@@ -118,7 +119,10 @@ func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) 
 		},
 	}
 
-	status, err := bucket.Status()
+	sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer scancel()
+
+	status, err := bucket.Status(sctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +165,7 @@ func (e *election) debugf(format string, a ...any) {
 func (e *election) campaignForLeadershipLocked() error {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[CandidateState]).Inc()
 
-	seq, err := e.opts.bucket.Create(e.opts.key, []byte(e.opts.name))
+	seq, err := e.opts.bucket.Create(e.ctx, e.opts.key, []byte(e.opts.name))
 	if err != nil {
 		e.tries++
 		e.debugf("campaign create failed: %v", err)
@@ -181,8 +185,16 @@ func (e *election) campaignForLeadershipLocked() error {
 func (e *election) maintainLeadershipLocked() (wonCb func(), lostCb func(), err error) {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[LeaderState]).Inc()
 
-	seq, err := e.opts.bucket.Update(e.opts.key, []byte(e.opts.name), e.lastSeq)
+	seq, err := e.opts.bucket.Update(e.ctx, e.opts.key, []byte(e.opts.name), e.lastSeq)
 	if err != nil {
+		// Context cancellation is not a CAS failure. Shutdown will drive the
+		// stand-down via e.ctx.Done() in campaign(); don't pre-empt it here or
+		// we risk double-firing callbacks and mis-labeling the cause.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			e.debugf("update canceled: %v", err)
+			return nil, nil, err
+		}
+
 		e.debugf("key update failed, moving to candidate state: %v", err)
 		e.state = CandidateState
 		e.lastSeq = math.MaxUint64
