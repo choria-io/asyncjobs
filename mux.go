@@ -19,19 +19,56 @@ import (
 )
 
 type entryHandler struct {
-	ttype string
-	hf    HandlerFunc
+	ttype    string
+	hf       HandlerFunc
+	mws      []Middleware
+	combined HandlerFunc
 }
 
 // HandlerFunc handles a single task, the response bytes will be stored in the original task
 type HandlerFunc func(ctx context.Context, log Logger, t *Task) (any, error)
 
-// Mux routes messages
+// Middleware wraps a HandlerFunc to add cross-cutting behavior like logging,
+// metrics, tracing, authentication, or panic recovery.
 //
-// Note: this will change to be nearer to a server mux and include support for middleware
+// A middleware should normally invoke next(ctx, log, t) and return its result
+// and error unchanged unless deliberately transforming them. To short-circuit
+// (for example on an authentication failure) return without calling next.
+//
+// Middleware must use the (ctx, log, t) arguments passed to the returned
+// closure. Capturing values from the surrounding scope at construction time
+// will leak them across dispatches.
+//
+// A typical pass-through middleware looks like:
+//
+//	func Logging(next HandlerFunc) HandlerFunc {
+//	    return func(ctx context.Context, log Logger, t *Task) (any, error) {
+//	        start := time.Now()
+//	        res, err := next(ctx, log, t)
+//	        log.Infof("task %s %s took %s err=%v", t.Type, t.ID, time.Since(start), err)
+//	        return res, err
+//	    }
+//	}
+type Middleware func(HandlerFunc) HandlerFunc
+
+// Chain composes middleware into a single Middleware preserving order, so
+// Chain(a, b, c) wraps a handler such that a runs outermost, then b, then c.
+// It is useful for building reusable bundles like
+// auth+logging+metrics that can be passed to Use or HandleFunc as one value.
+func Chain(mws ...Middleware) Middleware {
+	return func(next HandlerFunc) HandlerFunc {
+		for i := len(mws) - 1; i >= 0; i-- {
+			next = mws[i](next)
+		}
+		return next
+	}
+}
+
+// Mux routes tasks to handlers and supports global and per-route middleware.
 type Mux struct {
 	hf  map[string]*entryHandler
 	ehf []*entryHandler
+	mws []Middleware
 	mu  *sync.Mutex
 }
 
@@ -48,27 +85,70 @@ func notFoundHandler(_ context.Context, _ Logger, t *Task) (any, error) {
 	return nil, fmt.Errorf("%w %q", ErrNoHandlerForTaskType, t.Type)
 }
 
-// Handler looks up the handler function for a task
+// Handler looks up the handler function for a task. The returned function has
+// any registered global and per-route middleware already applied. Tasks with
+// no matching handler resolve to a built-in handler that returns
+// ErrNoHandlerForTaskType; that handler is intentionally not wrapped by
+// middleware so unrouted tasks do not generate logging or metric noise.
 func (m *Mux) Handler(t *Task) HandlerFunc {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	hf, ok := m.hf[t.Type]
-	if ok {
-		return hf.hf
+	if e, ok := m.hf[t.Type]; ok {
+		return e.combined
 	}
 
-	for _, hf := range m.ehf {
-		if strings.HasPrefix(t.Type, hf.ttype) {
-			return hf.hf
+	for _, e := range m.ehf {
+		if strings.HasPrefix(t.Type, e.ttype) {
+			return e.combined
 		}
 	}
 
 	return notFoundHandler
 }
 
-// HandleFunc registers a task for a taskType. The taskType must match exactly with the matching tasks
-func (m *Mux) HandleFunc(taskType string, h HandlerFunc) error {
+// Use appends middleware that will be applied to every registered handler.
+// Middleware registered earlier runs outermost: Use(Recovery, Logging) yields
+// a chain like Recovery(Logging(Per-route(handler))) on dispatch. Middleware
+// registered via Use always wraps any per-route middleware passed to
+// HandleFunc.
+//
+// Use may be called before or after HandleFunc; existing handlers are
+// rewrapped so subsequent dispatches see the new chain. Dispatches already in
+// flight keep the chain they previously resolved.
+//
+// Returns ErrInvalidMiddleware if any of mws is nil. The built-in handler
+// returned for unrouted task types is not wrapped.
+func (m *Mux) Use(mws ...Middleware) error {
+	for _, mw := range mws {
+		if mw == nil {
+			return ErrInvalidMiddleware
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.mws = append(m.mws, mws...)
+	for _, e := range m.hf {
+		e.combined = m.buildChain(e)
+	}
+
+	return nil
+}
+
+// HandleFunc registers h for an exact taskType match. Optional per-route
+// middleware in mws is applied inside any middleware registered via Use, in
+// the order given (first-registered runs outermost). Returns
+// ErrDuplicateHandlerForTaskType if taskType is already registered, or
+// ErrInvalidMiddleware if any of mws is nil.
+func (m *Mux) HandleFunc(taskType string, h HandlerFunc, mws ...Middleware) error {
+	for _, mw := range mws {
+		if mw == nil {
+			return ErrInvalidMiddleware
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -77,14 +157,30 @@ func (m *Mux) HandleFunc(taskType string, h HandlerFunc) error {
 		return fmt.Errorf("%w %q", ErrDuplicateHandlerForTaskType, taskType)
 	}
 
-	m.hf[taskType] = &entryHandler{hf: h, ttype: taskType}
-	m.ehf = append(m.ehf, m.hf[taskType])
+	e := &entryHandler{hf: h, ttype: taskType, mws: mws}
+	e.combined = m.buildChain(e)
+
+	m.hf[taskType] = e
+	m.ehf = append(m.ehf, e)
 
 	sort.Slice(m.ehf, func(i, j int) bool {
 		return len(m.ehf[i].ttype) > len(m.ehf[j].ttype)
 	})
 
 	return nil
+}
+
+// buildChain wraps the entry's base handler with its per-route middleware
+// and then with the Mux-level middleware. Must be called with m.mu held.
+func (m *Mux) buildChain(e *entryHandler) HandlerFunc {
+	h := e.hf
+	for i := len(e.mws) - 1; i >= 0; i-- {
+		h = e.mws[i](h)
+	}
+	for i := len(m.mws) - 1; i >= 0; i-- {
+		h = m.mws[i](h)
+	}
+	return h
 }
 
 // RequestReply sets up a delegated handler via NATS Request-Reply

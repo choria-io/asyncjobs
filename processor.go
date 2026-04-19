@@ -215,10 +215,10 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 		cancel()
 
 		switch {
-		case err == context.Canceled:
+		case errors.Is(err, context.Canceled):
 			p.log.Debugf("Context canceled, terminating polling")
 			return nil, err
-		case err == context.DeadlineExceeded:
+		case errors.Is(err, context.DeadlineExceeded):
 			p.log.Debugf("Context timeout, retrying poll")
 			ctr = 0
 			continue
@@ -226,7 +226,7 @@ func (p *processor) pollItem(ctx context.Context) (*ProcessItem, error) {
 		case err != nil:
 			p.log.Debugf("Unexpected polling error: %v", err)
 			workQueuePollErrorCounter.WithLabelValues(p.queue.Name).Inc()
-			if RetrySleep(ctx, retryLinearTenSeconds, ctr) == context.Canceled {
+			if errors.Is(RetrySleep(ctx, retryLinearTenSeconds, ctr), context.Canceled) {
 				return nil, ctx.Err()
 			}
 			ctr++
@@ -254,11 +254,11 @@ func (p *processor) processMessages(ctx context.Context, mux *Mux) error {
 		case <-p.limiter:
 			item, err := p.pollItem(ctx)
 			if err != nil {
-				if err == context.DeadlineExceeded {
+				if errors.Is(err, context.DeadlineExceeded) {
 					p.log.Infof("Processor exiting on context %s", err)
 					return nil
 				}
-				if err == context.Canceled {
+				if errors.Is(err, context.Canceled) {
 					return nil
 				}
 

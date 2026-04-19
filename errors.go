@@ -53,6 +53,8 @@ var (
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")
 	// ErrDuplicateHandlerForTaskType indicates a task handler for a specific type is already registered
 	ErrDuplicateHandlerForTaskType = fmt.Errorf("duplicate handler for task type")
+	// ErrInvalidMiddleware indicates a nil Middleware was passed to Use or HandleFunc
+	ErrInvalidMiddleware = fmt.Errorf("invalid middleware")
 
 	// ErrInvalidHeaders indicates that message headers from JetStream were not valid
 	ErrInvalidHeaders = fmt.Errorf("coult not decode headers")
