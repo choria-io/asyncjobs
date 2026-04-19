@@ -1,3 +1,4 @@
+version: 2
 project_name: asyncjobs
 
 release:
@@ -6,9 +7,6 @@ release:
     name: asyncjobs
   name_template: "Release {{.Version}}"
   draft: true
-
-changelog:
-  skip: true
 
 builds:
   - main: ./ajc
@@ -25,32 +23,42 @@ builds:
     goarm:
       - "6"
       - "7"
+    ignore:
+      - goos: windows
+        goarch: arm
 
 archives:
-  - name_template: "asyncjobs-{{.Version}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}"
+  - name_template: "nats-{{.Version}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}"
     wrap_in_directory: true
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - README.md
       - LICENSE
 
-dockers:
-  - goos: linux
-    goarch: amd64
-    skip_push: true
-    dockerfile: Dockerfile.goreleaser
-    image_templates:
-      - "choria/asyncjobs:latest"
-      - "choria/asyncjobs:{{ .Version }}"
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
+dockers_v2:
+  - dockerfile: Dockerfile.goreleaser
+    images:
+      - registry.choria.io/choria/ccm
+    tags:
+      - "v{{ .Version }}"
+      - "{{ if .IsNightly }}nightly{{ end }}"
+      - "{{ if not .IsNightly }}latest{{ end }}"
+    labels:
+      "org.opencontainers.image.description": "Choria Configuration Manager"
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+
+    platforms:
+      - linux/amd64
+      - linux/arm64
 
 checksum:
   name_template: "SHA256SUMS"
