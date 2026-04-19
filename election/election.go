@@ -2,13 +2,47 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package election implements a simple leader election on top of a
+// NATS JetStream Key-Value bucket.
+//
+// Each candidate runs a campaign loop against a single key in a KV bucket
+// whose bucket TTL determines how long a stale leader record survives.
+// Elections progress in two roles:
+//
+//   - Candidate: attempts to Create the key. Create is atomic in JetStream
+//     and will succeed for exactly one candidate when the key is absent
+//     (either never written, or expired via the bucket TTL). On success the
+//     candidate becomes leader; on failure it waits for the next tick.
+//
+//   - Leader: periodically Updates the key using compare-and-swap against
+//     the last observed revision. Refreshing the key keeps it from
+//     expiring. If the CAS fails (key deleted, overwritten, or another
+//     writer raced in) the leader immediately steps down to candidate and
+//     lets the TTL adjudicate the next round.
+//
+// The campaign interval defaults to 75% of the bucket TTL so a leader gets
+// multiple refresh attempts before its record can expire. Candidates sleep
+// a small random splay on startup to reduce thundering-herd Create
+// contention, and an optional Backoff can lengthen the interval while a
+// candidate is losing campaigns.
+//
+// After winning, leadership is not announced until the next successful
+// maintain tick — this gives a prior leader time to observe its own CAS
+// failure and run OnLost before OnWon fires elsewhere, keeping observers
+// consistent with the single-writer invariant the KV enforces.
+//
+// Safety comes from JetStream: Create and revisioned Update are atomic, so
+// at most one candidate holds the key at any instant. Liveness comes from
+// the TTL: if a leader dies without stepping down, the key expires and a
+// new election proceeds. There is a brief window (up to one TTL) during
+// which no leader exists; callers must tolerate this.
 package election
 
 import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -28,6 +62,8 @@ type State uint
 type Election interface {
 	Start(ctx context.Context) error
 	Stop()
+	IsLeader() bool
+	State() State
 }
 
 const (
@@ -66,7 +102,10 @@ type election struct {
 	mu sync.Mutex
 }
 
-var skipValidate bool
+var (
+	skipValidate bool
+	skipSplay    bool
+)
 
 func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) (Election, error) {
 	e := &election{
@@ -118,12 +157,14 @@ func (e *election) debugf(format string, a ...any) {
 	e.opts.debug(format, a...)
 }
 
-func (e *election) campaignForLeadership() error {
+// caller must hold e.mu
+func (e *election) campaignForLeadershipLocked() error {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[CandidateState]).Inc()
 
 	seq, err := e.opts.bucket.Create(e.opts.key, []byte(e.opts.name))
 	if err != nil {
 		e.tries++
+		e.debugf("campaign create failed: %v", err)
 		return nil
 	}
 
@@ -136,7 +177,8 @@ func (e *election) campaignForLeadership() error {
 	return nil
 }
 
-func (e *election) maintainLeadership() error {
+// caller must hold e.mu. Returns callbacks to invoke after the mutex is released.
+func (e *election) maintainLeadershipLocked() (wonCb func(), lostCb func(), err error) {
 	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[LeaderState]).Inc()
 
 	seq, err := e.opts.bucket.Update(e.opts.key, []byte(e.opts.name), e.lastSeq)
@@ -144,47 +186,63 @@ func (e *election) maintainLeadership() error {
 		e.debugf("key update failed, moving to candidate state: %v", err)
 		e.state = CandidateState
 		e.lastSeq = math.MaxUint64
+		e.tries = 0
 
 		leaderGauge.WithLabelValues(e.opts.key, e.opts.name).Set(0)
 
-		if e.opts.lostCb != nil {
-			e.opts.lostCb()
+		// only notify loss if a win was actually announced; losing between
+		// Create success and the first maintain means the user never saw OnWon
+		if e.notifyNext {
+			e.notifyNext = false
+			return nil, nil, err
 		}
-
-		return err
+		return nil, e.opts.lostCb, err
 	}
 	e.lastSeq = seq
 
 	// we wait till the next campaign to notify that we are leader to give others a chance to stand down
 	if e.notifyNext {
 		e.notifyNext = false
-		if e.opts.wonCb != nil {
-			ctxSleep(e.ctx, 200*time.Millisecond)
-			e.opts.wonCb()
-		}
+		return nil, e.opts.wonCb, nil
 	}
 
-	return nil
+	return nil, nil, nil
 }
 
 func (e *election) try() error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	currentState := e.state
+	campaignCb := e.opts.campaignCb
+	e.mu.Unlock()
 
-	if e.opts.campaignCb != nil {
-		e.opts.campaignCb(e.state)
+	if campaignCb != nil {
+		campaignCb(currentState)
 	}
 
+	e.mu.Lock()
+	var (
+		err    error
+		wonCb  func()
+		lostCb func()
+	)
 	switch e.state {
 	case LeaderState:
-		return e.maintainLeadership()
-
+		wonCb, lostCb, err = e.maintainLeadershipLocked()
 	case CandidateState:
-		return e.campaignForLeadership()
-
+		err = e.campaignForLeadershipLocked()
 	default:
-		return fmt.Errorf("campaigned while in unknown state")
+		err = fmt.Errorf("campaigned while in unknown state")
 	}
+	e.mu.Unlock()
+
+	if lostCb != nil {
+		lostCb()
+	}
+	if wonCb != nil {
+		wonCb()
+	}
+
+	return err
 }
 
 func (e *election) campaign(wg *sync.WaitGroup) error {
@@ -195,8 +253,10 @@ func (e *election) campaign(wg *sync.WaitGroup) error {
 	e.mu.Unlock()
 
 	// spread out startups a bit
-	splay := time.Duration(rand.Intn(5000)) * time.Millisecond
-	ctxSleep(e.ctx, splay)
+	if !skipSplay {
+		splay := time.Duration(rand.IntN(5000)) * time.Millisecond
+		ctxSleep(e.ctx, splay)
+	}
 
 	var ticker *time.Ticker
 	if e.opts.bo != nil {
@@ -231,9 +291,11 @@ func (e *election) campaign(wg *sync.WaitGroup) error {
 
 		case <-e.ctx.Done():
 			ticker.Stop()
+
+			wasLeader := e.IsLeader()
 			e.stop()
 
-			if e.opts.lostCb != nil && e.IsLeader() {
+			if wasLeader && e.opts.lostCb != nil {
 				e.debugf("Calling leader lost during shutdown")
 				e.opts.lostCb()
 			}
@@ -279,17 +341,12 @@ func (e *election) Start(ctx context.Context) error {
 
 func (e *election) Stop() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	cancel := e.cancel
+	e.mu.Unlock()
 
-	if !e.started {
-		return
+	if cancel != nil {
+		cancel()
 	}
-
-	if e.cancel != nil {
-		e.cancel()
-	}
-
-	e.stop()
 }
 
 func (e *election) IsLeader() bool {
