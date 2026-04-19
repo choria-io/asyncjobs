@@ -1,19 +1,19 @@
 +++
 title = "Choria Async Jobs"
+description = "Process asynchronous tasks on NATS JetStream work queues"
+toc = true
 weight = 5
 +++
 
-# Introduction
+Choria Async Jobs is an asynchronous job queue system backed by NATS JetStream. It works with any JetStream-compatible system, including self-hosted JetStream, Choria Streams, and commercial SaaS offerings.
 
-This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management. It is compatible with any NATS JetStream based system like a private hosted JetStream, Choria Streams or a commercial SaaS.
+Each task is stored in JetStream under a unique ID, with a work queue item referencing that task. JetStream handles scheduling, retries, and acknowledgements for the work queue item. The stored task is updated throughout its lifecycle.
 
-Each Task is stored in JetStream by a unique ID and Work Queue item is made referencing that Task. JetStream will handle dealing with scheduling, retries, acknowledgements and more of the Work Queue item. The stored Task will be updated during the lifecycle.
-
-Multiple processes can process jobs concurrently, thus job processing is both horizontally and vertically scalable. Job handlers are implemented in Go with one process hosting one or many handlers. Other languages can implement Job Handlers using NATS Request-Reply services. Per process concurrency and overall per-queue concurrency controls exist.
+Multiple processes can process jobs concurrently, giving horizontal and vertical scalability. Job handlers are written in Go, with one process hosting one or many handlers. Other languages can implement handlers through NATS Request-Reply services. Per-process and per-queue concurrency controls are available.
 
 ## Synopsis
 
-Tasks are published to Work Queues:
+Tasks are published to work queues:
 
 ```go
 // establish a connection to the EMAIL work queue using a NATS context
@@ -26,8 +26,7 @@ task, _ := asyncjobs.NewTask("email:new", newEmail())
 client.EnqueueTask(ctx, task)
 ```
 
-Tasks are processes by horizontally and vertically scalable processes. Typically, a Handler handles one type of Task. We have Prometheus
-integration, concurrency and backoffs configured.
+Tasks are processed by horizontally and vertically scalable workers. A handler typically handles one type of task. Prometheus integration, concurrency limits, and retry backoff are configurable.
 
 ```go
 // establish a connection to the EMAIL work queue using a 

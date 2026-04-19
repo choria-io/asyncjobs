@@ -1,22 +1,23 @@
 +++
 title = "Terminology"
+description = "Define terms used throughout the project"
 toc = true
 weight = 60
 +++
 
-Several terms are used in this system as outlined here.
+Several terms recur throughout this system.
 
 ## JetStream
 
 The underlying storage and work queue manager. See the [NATS project documentation](https://docs.nats.io/nats-concepts/jetstream) for background.
 
-## Work Queue
+## Work queue
 
-A Work Queue is JetStream Stream set with `WorkQueue` Retention policy. The underlying Stream holding these queues are called `CHORIA_AJ_Q_DEFAULT` for the `DEFAULT` queue.
+A work queue is a JetStream stream with the `WorkQueue` retention policy. The underlying stream backing the `DEFAULT` queue is called `CHORIA_AJ_Q_DEFAULT`.
 
-## Work Item
+## Work item
 
-Work Items are placed in the Work Queue and scheduled by JetStream. The contents of the Work Queue are `ProcessItem` messages encoded in JSON format.
+Work items are placed in the work queue and scheduled by JetStream. The contents of the work queue are `ProcessItem` messages encoded as JSON.
 
 ## Client
 
@@ -24,26 +25,26 @@ Connects to JetStream and manages the enqueueing and routing of tasks.
 
 ## Handler
 
-Handlers are functions that can process a task with the signature `func(context.Context, *asyncjobs.Task) (any, error)`.
+A handler is a function with the signature `func(context.Context, *asyncjobs.Task) (any, error)`.
 
 ## Router
 
-The Router locates handlers for a particular task using the `Type` field as a matcher.
+The router locates handlers for a task using the `Type` field as a matcher.
 
-See [Routing, Handlers, Concurrency and Retry](../routing-concurrency-retry/).
+See [Routing, Handlers, Concurrency, and Retry](../routing-concurrency-retry/).
 
 ## Task
 
-A task is a specific kind of Work Item that is handled by a Handler via a Router, this is the main processible unit. In time we anticipate other kinds of Item for example Scheduled items, now the only kind of Item is a Task.
+A task is a specific kind of work item handled by a handler via the router. Tasks are the primary unit of work. Other kinds of work item are anticipated, such as scheduled items. At present, tasks are the only kind.
 
-Task have time stamps, statuses and more. See [Task Lifecycle](../task-lifecycle/).
+Tasks have timestamps, statuses, and more. See [Task Lifecycle](../task-lifecycle/).
 
-## Lifecycle Event
+## Lifecycle event
 
-Events are small messages published to notify listeners about the state of changes. Today only Task State changes are reported, in future we will report more such as Processor start and stop etc.
+A lifecycle event is a small message published to notify listeners about state changes. Only task state changes are reported today. Processor start and stop events and similar signals will follow.
 
-See [Lifecycle Events](../lifecycle-events/)
+See [Lifecycle Events](../lifecycle-events/).
 
-## Scheduled Task
+## Scheduled task
 
-A cron like schedule for creating tasks on demand. Requires the running of a Task Scheduler process.  See [Scheduled Tasks](../../overview/scheduled-tasks/)
+A cron-like schedule that creates tasks on demand. A task scheduler process must be running. See [Scheduled Tasks](../../overview/scheduled-tasks/).
