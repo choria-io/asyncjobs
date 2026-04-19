@@ -1,12 +1,12 @@
-# Choria Configuration Manager
+# Choria Async Jobs
 
 
 > CCM is a small-scale Configuration Management system designed to meet users where they are - enabling experimentation, R&D, and exploration without the overhead of full-system management while still following sound Configuration Management principles. We focus on great UX, immediate feedback, and interactive use with minimal friction.
 
 ## Key Information
 
-- [Overviews](https://choria-cm.dev/overview/index.md): 
-- [References](https://choria-cm.dev/reference/index.md): 
+- [Overviews](https://choria-io.github.io/asyncjobs/overview/index.md): 
+- [References](https://choria-io.github.io/asyncjobs/reference/index.md): 
 
 
 ## Resource Reference
@@ -22,9 +22,9 @@
 
 ### YAML Manifest
 
- - [manifest.json](https://choria-cm.dev/schemas/v1/manifest.json): Schema for manifest.yaml
+ - [manifest.json](https://choria-io.github.io/asyncjobs/schemas/v1/manifest.json): Schema for manifest.yaml
 
 ### Shell JSON API
 
- - [resource_ensure_request.json](https://choria-cm.dev/schemas/v1/resource_ensure_request.json): Request schema for the Shell JSON API
- - [resource_ensure_response.json](https://choria-cm.dev/schemas/v1/resource_ensure_response.json): Response schema for the Shell JSON API
+ - [resource_ensure_request.json](https://choria-io.github.io/asyncjobs/schemas/v1/resource_ensure_request.json): Request schema for the Shell JSON API
+ - [resource_ensure_response.json](https://choria-io.github.io/asyncjobs/schemas/v1/resource_ensure_response.json): Response schema for the Shell JSON API

@@ -5,7 +5,7 @@ var relearn_searchindex = [
     "description": "Introduction This is an Asynchronous Job Queue system that relies on NATS JetStream for storage and general job life cycle management. It is compatible with any NATS JetStream based system like a private hosted JetStream, Choria Streams or a commercial SaaS.\nEach Task is stored in JetStream by a unique ID and Work Queue item is made referencing that Task. JetStream will handle dealing with scheduling, retries, acknowledgements and more of the Work Queue item. The stored Task will be updated during the lifecycle.",
     "tags": [],
     "title": "Choria Async Jobs",
-    "uri": "/index.html"
+    "uri": "/asyncjobs/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -13,7 +13,7 @@ var relearn_searchindex = [
     "description": "This is a basic walkthrough of publishing Tasks and handling Tasks in Go. A more thorough guide will be written in time.\nThis is an introductory guide, we have extensive Go reference documentation.\nThis guide is known to work with Release 0.0.4\nConnecting to JetStream A connection to a JetStream server is needed, you can either prepare a connecting yourself or pass in the name of a NATS Context",
     "tags": [],
     "title": "Golang Walkthrough",
-    "uri": "/overview/golang-overview/index.html"
+    "uri": "/asyncjobs/overview/golang-overview/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -21,7 +21,7 @@ var relearn_searchindex = [
     "description": "A task is the basic item of work that is scheduled and processed by a Handler.\nTask Storage Tasks are stored in NATS JetStream in a Stream called CHORIA_AJ_TASKS. Every Task is stored in a subject keyed by it’s ID CHORIA_AJ.T.\u003cTASK ID\u003e. Tasks must have unique IDs.\nTask storage defaults to being File based and non replicated with no limits on the number of Tasks or how long they are retained. It’s recommended that an appropriate retention time is set as detailed below.",
     "tags": [],
     "title": "Tasks lifecycle",
-    "uri": "/reference/task-lifecycle/index.html"
+    "uri": "/asyncjobs/reference/task-lifecycle/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -29,7 +29,7 @@ var relearn_searchindex = [
     "description": "This is a basic walkthrough of publishing Tasks and handling them using the CLI.\nThis is essentially the CLI version of Introductory Golang Walkthrough.\nThis guide is known to work with Release 0.0.4\nWe have a similar video walkthrough that discuss the CLI and related topics.\nRequirements You’ll need the NATS CLI, an optional JetStream Server and the Async Jobs CLI,",
     "tags": [],
     "title": "CLI Walkthrough",
-    "uri": "/overview/cli-overview/index.html"
+    "uri": "/asyncjobs/overview/cli-overview/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -37,7 +37,7 @@ var relearn_searchindex = [
     "description": "Processing Tasks is what it’s all about, so, this is an important topic to explore and understand. It is quite simple in the general case but there are some nuances to be aware of.\nHandlers are how Tasks get executed, typically this is code you provide written in Go.\nFor a non Go solution see Remote Request Reply Handlers, but reading this page is still good for a grounding understanding since remote Handlers map exactly onto the same concepts.",
     "tags": [],
     "title": "Routing, Concurrency, Retry",
-    "uri": "/reference/routing-concurrency-retry/index.html"
+    "uri": "/asyncjobs/reference/routing-concurrency-retry/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -45,7 +45,7 @@ var relearn_searchindex = [
     "description": "The Task Scheduler allows you to create cron like entries that will create Tasks on demand.\nThis requires a separate process to be run that will supervise the configured schedules and create the tasks. We have such a Scheduler built into the ajc binary deployable in any container manager.\nThe scheduler we provide support being deployed in a highly-available cluster, they will perform leader election with one of the cluster scheduling tasks. There is no need to restart or signal these schedulers as tasks are added, removed or updated.",
     "tags": [],
     "title": "Scheduled Tasks",
-    "uri": "/overview/scheduled-tasks/index.html"
+    "uri": "/asyncjobs/overview/scheduled-tasks/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -53,7 +53,7 @@ var relearn_searchindex = [
     "description": "We want to make it really easy to run handler services in Docker, toword that version 0.0.4 introduces a packager that can create containers on your behalf.\nPreparing Handlers Go Based The idea is that you would create a Handler per Go package, the packager will then pull in all the configured handlers into a small microservice.",
     "tags": [],
     "title": "Handlers in Docker",
-    "uri": "/overview/handlers-docker/index.html"
+    "uri": "/asyncjobs/overview/handlers-docker/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -61,7 +61,7 @@ var relearn_searchindex = [
     "description": "Typically, and for best performance, you implement your handlers in Go and compile them into the binary.\nIn order to support other programming languages we also support calling out over NATS in a Request-Reply fashion to a service that can be programmed in any language.\nIt’s worth understanding Routing, Handlers, Concurrency and Retry for background, these remote callout Handlers map exactly onto that model.\nRegistering with the Router client, _ := asyncjobs.NewClient(asyncjobs.NatsConn(nc), asyncjobs.BindWorkQueue(\"EMAIL\")) router := asyncjobs.NewTaskRouter() router.RequestReply(\"email:new\", client) client.Run(router) Here we register with the Router for tasks of type email:new that will call out via Request-Reply.",
     "tags": [],
     "title": "Request-Reply Handlers",
-    "uri": "/reference/request-reply/index.html"
+    "uri": "/asyncjobs/reference/request-reply/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -69,7 +69,7 @@ var relearn_searchindex = [
     "description": "We publish Helm charts to deploy the system to Kubernetes.\nRequirements NATS Server with JetStream You need a NATS JetStream server, if you are a Choria User you can enable Choria Streams otherwise the NATS Community has their own NATS Helm Charts.\nConnection Context We use NATS Contexts to configure the connection between asyncjobs and NATS. If you already have a context configured using the NATS CLI then use nats context show CONTEXTNAME --json to get the keys and values to configure.",
     "tags": [],
     "title": "Handlers in K8s",
-    "uri": "/overview/handlers-k8s/index.html"
+    "uri": "/asyncjobs/overview/handlers-k8s/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -77,7 +77,7 @@ var relearn_searchindex = [
     "description": "Lifecycle events are small JSON messages that are published to notify about various stages of processing and the life of a client.\nToday the only event we support is one notifying about changes in Task State but more will be added. In future we will support emitting Cloud Event standard events.\nEvents are not guaranteed to be delivered and are not persisted, they are informational. While you can use them to build a kind of coupled system of waiting for a task to complete you should not rely on these events to be delivered in 100% of cases.",
     "tags": [],
     "title": "Lifecycle Events",
-    "uri": "/reference/lifecycle-events/index.html"
+    "uri": "/asyncjobs/reference/lifecycle-events/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e Overviews",
@@ -85,7 +85,7 @@ var relearn_searchindex = [
     "description": "This feature list is incomplete, at present the focus is on determining what will work well for the particular patterns JetStream enables, so there might be some churn in the feature set here.\nTasks Task definitions stored post-processing, with various retention and discard policies Ability to retry a Task that has already been completed or failed Task deduplication Deadline per task - after this time the task will not be processed Tasks can depend on other tasks Max tries per task, capped to the queue tries Task state tracked throughout it’s lifecycle K-Sortable Task GUIDs Lifecycle events published about changes to task states See Task Lifecycle for full background and details",
     "tags": [],
     "title": "Feature List",
-    "uri": "/overview/features/index.html"
+    "uri": "/asyncjobs/overview/features/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -93,7 +93,7 @@ var relearn_searchindex = [
     "description": "Sometimes you want to run a handler in a insecure location and want to be sure it only executes tasks from trusted creators.\nTasks can be signed using ed25519 private keys and clients can be configured to only accept tasks created and signed using a specific key. We support requiring all tasks are signed when keys are configured (the default), or accepting unsigned tasks but requiring signed tasks are verified.",
     "tags": [],
     "title": "Security",
-    "uri": "/reference/security/index.html"
+    "uri": "/asyncjobs/reference/security/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs \u003e References",
@@ -101,7 +101,7 @@ var relearn_searchindex = [
     "description": "Several terms are used in this system as outlined here.\nJetStream The underlying storage and work queue manager. See the NATS project documentation for background.\nWork Queue A Work Queue is JetStream Stream set with WorkQueue Retention policy. The underlying Stream holding these queues are called CHORIA_AJ_Q_DEFAULT for the DEFAULT queue.",
     "tags": [],
     "title": "Terminology",
-    "uri": "/reference/terminology/index.html"
+    "uri": "/asyncjobs/reference/terminology/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs",
@@ -109,7 +109,7 @@ var relearn_searchindex = [
     "description": "",
     "tags": [],
     "title": "Categories",
-    "uri": "/categories/index.html"
+    "uri": "/asyncjobs/categories/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs",
@@ -117,7 +117,7 @@ var relearn_searchindex = [
     "description": "",
     "tags": [],
     "title": "Overviews",
-    "uri": "/overview/index.html"
+    "uri": "/asyncjobs/overview/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs",
@@ -125,7 +125,7 @@ var relearn_searchindex = [
     "description": "",
     "tags": [],
     "title": "References",
-    "uri": "/reference/index.html"
+    "uri": "/asyncjobs/reference/index.html"
   },
   {
     "breadcrumb": "Choria Async Jobs",
@@ -133,6 +133,6 @@ var relearn_searchindex = [
     "description": "",
     "tags": [],
     "title": "Tags",
-    "uri": "/tags/index.html"
+    "uri": "/asyncjobs/tags/index.html"
   }
 ]
