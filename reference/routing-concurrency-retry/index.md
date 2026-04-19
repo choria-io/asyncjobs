@@ -48,7 +48,7 @@ Every client that processes messages must be ready to process every message foun
 
 A message with no matching handler fails and enters retries.
 
-Task delivery is handled by `asyncjobs.Mux` which today is quite minimal, we plan to support Middleware and more later.
+Task delivery is handled by `asyncjobs.Mux`.
 
 ```go
 router := asyncjobs.NewTaskRouter()
@@ -59,6 +59,66 @@ client.Run(ctx, router)
 ```
 
 The router above dispatches `email:new` tasks to `emailNewHandler` and all other tasks to `emailPassthroughHandler`. A handler registered for `email:` would process all unmatched email-related tasks.
+
+## Middleware
+
+Cross-cutting behavior such as logging, metrics, tracing, authentication, or panic recovery is typically expressed as middleware. A `Middleware` is a function that wraps a `HandlerFunc` and returns a new one:
+
+```go
+func Logging(next asyncjobs.HandlerFunc) asyncjobs.HandlerFunc {
+	return func(ctx context.Context, log asyncjobs.Logger, t *asyncjobs.Task) (any, error) {
+		start := time.Now()
+		res, err := next(ctx, log, t)
+		log.Infof("task %s %s took %s err=%v", t.Type, t.ID, time.Since(start), err)
+		return res, err
+	}
+}
+```
+
+Middleware should normally invoke `next(ctx, log, t)` and return its result and error unchanged. To short-circuit (for example on an authentication failure) return without calling `next`. Always use the `(ctx, log, t)` arguments passed to the returned closure; capturing values from the surrounding scope at construction time will leak them across dispatches.
+
+### Global Middleware
+
+Use `Mux.Use` to register middleware that applies to every handler:
+
+```go
+router := asyncjobs.NewTaskRouter()
+router.Use(Recovery, Logging)
+router.HandleFunc("email:new", emailNewHandler)
+```
+
+Middleware registered earlier runs outermost, so the example above resolves at dispatch time to `Recovery(Logging(emailNewHandler))`. Put a recovery middleware first if you want it to catch panics from later middleware as well as the handler.
+
+`Use` may be called before or after `HandleFunc`; existing handlers are rewrapped so subsequent dispatches see the new chain. Dispatches already in flight keep the chain they previously resolved.
+
+### Per-Route Middleware
+
+`HandleFunc` accepts optional middleware that applies only to that route, inside any global middleware:
+
+```go
+router.Use(Logging)
+router.HandleFunc("email:new", emailNewHandler, RequireSignedTask)
+```
+
+The dispatch chain is `Logging(RequireSignedTask(emailNewHandler))` — global middleware always wraps per-route middleware, which always wraps the handler.
+
+### Reusable Bundles
+
+`asyncjobs.Chain` composes several middlewares into one, useful when the same combination is reused across routes:
+
+```go
+secured := asyncjobs.Chain(RequireSignedTask, AuditLog)
+router.HandleFunc("email:new", emailNewHandler, secured)
+router.HandleFunc("billing:charge", chargeHandler, secured)
+```
+
+Order is preserved: `Chain(a, b, c)` runs `a` outermost, then `b`, then `c`.
+
+### Unrouted Tasks
+
+The built-in handler returned for task types with no matching route is intentionally not wrapped by middleware. This keeps unrouted tasks from generating logging or metric noise; if you want to observe them, register a catch-all handler with `HandleFunc("", ...)` or a prefix that matches them.
+
+Both `Use` and `HandleFunc` return `ErrInvalidMiddleware` if any supplied middleware is `nil`.
 
 ## Concurrency
 
