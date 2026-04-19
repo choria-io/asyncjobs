@@ -4,3 +4,4 @@ dist
 .hugo_build.lock
 docs/public
 CLAUDE.md
+spec/

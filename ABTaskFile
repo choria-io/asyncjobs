@@ -125,6 +125,7 @@ commands:
 
     - name: docs
       type: parent
+      aliases: [doc]
       description: Documentation related commands
       commands:
         - name: serve
@@ -136,6 +137,23 @@ commands:
               description: The port to listen on
               default: "8081"
           command: hugo serve -p {{ .Flags.port }} -s docs
+
+        - name: serve-api
+          description: Serves the HTTP API OpenAPI spec via swagger-ui in Docker
+          type: exec
+          dir: "{{ AppDir }}"
+          flags:
+            - name: port
+              description: The port to bind swagger-ui on
+              default: "8081"
+          command: docker run --rm -p {{ .Flags.port }}:8080 -v {{ AppDir }}/api:/spec -e SWAGGER_JSON=/spec/openapi.yaml swaggerapi/swagger-ui
+
+    - name: generate
+      type: exec
+      aliases: [gen, g]
+      description: Regenerates the HTTP API server bindings from api/openapi.yaml
+      dir: "{{ AppDir }}"
+      command: go generate ./httpserver/...
 
     - name: build
       type: parent

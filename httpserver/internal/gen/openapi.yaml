@@ -1,0 +1,901 @@
+openapi: 3.0.3
+info:
+  title: asyncjobs HTTP API
+  version: 1.0.0
+  license:
+    name: Apache-2.0
+  description: |
+    HTTP/JSON API for the asyncjobs NATS-backed work queue library.
+
+    ## Authentication
+
+    The server performs no authentication and no authorization. Deployers
+    who require either front the server with a reverse proxy (nginx,
+    oauth2-proxy, envoy, caddy, Traefik, Tailscale, ...) that terminates
+    authentication before traffic reaches the listener. As a direct-TLS
+    alternative, the server can be configured with a CA bundle; when set,
+    every TLS client must present a certificate chain that verifies
+    against that CA.
+
+    Clients will still receive `401 Unauthorized` and `403 Forbidden`
+    responses when a fronting proxy rejects them — those responses do not
+    originate from this server. The `Error` envelope shape is set by the
+    proxy in that case.
+
+    ## Deadlines and durations
+
+    - Task `deadline` values are absolute RFC3339 timestamps.
+    - Scheduled-task `deadline_offset` values use Go duration strings
+      (e.g. `30s`, `5m`, `1h`).
+    - Queue duration fields in requests use Go duration strings.
+    - Queue duration fields in responses echo the library JSON, which is
+      int64 nanoseconds. Convert accordingly when round-tripping.
+
+    ## Payloads
+
+    Create requests accept either `payload` (any JSON value, server-encoded)
+    or `payload_base64` (pre-encoded bytes). Setting both yields HTTP 400.
+
+    Task and schedule responses return `payload` as a base64 string; this
+    matches the library's `[]byte` JSON encoding. Decode before use, and
+    use `payload_base64` when resubmitting a fetched task.
+
+    ## Errors
+
+    All error responses share the `Error` envelope with a stable string
+    `code`. Treat `code` as the machine-readable surface; `message` is for
+    operators. `details` is a closed structured shape and never carries
+    raw upstream error strings.
+
+servers:
+  - url: /
+
+tags:
+  - name: Tasks
+    description: Create, inspect, retry, and delete individual tasks.
+  - name: Queues
+    description: Manage work queues.
+  - name: Schedules
+    description: Manage recurring scheduled tasks.
+  - name: Meta
+    description: Server and deployment information.
+  - name: Bulk
+    description: Operations that act on multiple resources in one call.
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [Meta]
+      summary: Liveness probe.
+      responses:
+        '200':
+          description: Service process is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /readyz:
+    get:
+      operationId: getReadyz
+      tags: [Meta]
+      summary: Readiness probe with dependency checks.
+      responses:
+        '200':
+          description: All readiness checks pass.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: One or more checks failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /v1/info:
+    get:
+      operationId: getInfo
+      tags: [Meta]
+      summary: Server and storage snapshot.
+      responses:
+        '200':
+          description: Server info.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Info'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/retry-policies:
+    get:
+      operationId: listRetryPolicies
+      tags: [Meta]
+      summary: List named retry policies.
+      responses:
+        '200':
+          description: Retry policies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RetryPolicy'
+
+  /v1/tasks:
+    get:
+      operationId: listTasks
+      tags: [Tasks]
+      summary: List tasks (snapshot).
+      description: |
+        Snapshot listing backed by an ephemeral JetStream consumer.
+        No cursor pagination. Server-side filters are applied after
+        fetch. The endpoint is rate-limited to prevent ephemeral
+        consumer churn and may return fewer tasks than are present
+        in the store.
+      parameters:
+        - name: state
+          in: query
+          description: Repeatable. Filters by task state.
+          explode: true
+          style: form
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/TaskState'
+        - name: queue
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: created_since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - name: stream
+          in: query
+          description: When `ndjson`, stream newline-delimited JSON.
+          schema:
+            type: string
+            enum: [ndjson]
+      responses:
+        '200':
+          description: Task list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: createTask
+      tags: [Tasks]
+      summary: Create and enqueue a task.
+      description: |
+        Provide exactly one of `payload` or `payload_base64`. If the
+        deployment is configured with a `TaskVerificationKey`, the
+        caller must also supply a valid `signature`; the server does
+        not sign on behalf of callers.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            Best-effort idempotency. Replays within a server-defined
+            retention window return the original response.
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+      responses:
+        '201':
+          description: Task created and enqueued.
+          headers:
+            Location:
+              description: URL of the created task.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /v1/tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getTask
+      tags: [Tasks]
+      summary: Fetch a task by id.
+      responses:
+        '200':
+          description: Task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteTask
+      tags: [Tasks]
+      summary: Delete a task.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/tasks/{id}/retry:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: retryTask
+      tags: [Tasks]
+      summary: Retry a single task.
+      responses:
+        '200':
+          description: Task re-enqueued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/tasks/retry:
+    post:
+      operationId: retryTasks
+      tags: [Tasks, Bulk]
+      summary: Retry multiple tasks.
+      description: |
+        Per-item results; overall HTTP status is 200 even when
+        individual items fail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRetryRequest'
+      responses:
+        '200':
+          description: Per-item retry results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkRetryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/queues:
+    get:
+      operationId: listQueues
+      tags: [Queues]
+      summary: List queues.
+      description: |
+        Opaque JetStream and consumer detail are never returned by this
+        endpoint; inspect queues via the NATS tooling if raw detail is
+        required.
+      responses:
+        '200':
+          description: Queue list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queues]
+                properties:
+                  queues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueueInfo'
+    post:
+      operationId: createQueue
+      tags: [Queues]
+      summary: Create a queue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueCreateRequest'
+      responses:
+        '201':
+          description: Queue created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/queues/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getQueue
+      tags: [Queues]
+      summary: Fetch queue info.
+      responses:
+        '200':
+          description: Queue info.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteQueue
+      tags: [Queues]
+      summary: Delete a queue.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/queues/{name}/purge:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: purgeQueue
+      tags: [Queues]
+      summary: Purge queue contents.
+      responses:
+        '202':
+          description: Purge accepted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/schedules:
+    get:
+      operationId: listSchedules
+      tags: [Schedules]
+      summary: List scheduled tasks.
+      responses:
+        '200':
+          description: Schedule list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schedules]
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Schedule'
+    post:
+      operationId: createSchedule
+      tags: [Schedules]
+      summary: Create a scheduled task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCreateRequest'
+      responses:
+        '201':
+          description: Schedule created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/schedules/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getSchedule
+      tags: [Schedules]
+      summary: Fetch a scheduled task.
+      responses:
+        '200':
+          description: Schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteSchedule
+      tags: [Schedules]
+      summary: Delete a scheduled task.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  responses:
+    BadRequest:
+      description: Input validation error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: State conflict, e.g. duplicate resource or blocked transition.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: Request body exceeds the server's size limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable error code.
+              enum:
+                - invalid_argument
+                - not_found
+                - conflict
+                - duplicate
+                - rate_limited
+                - payload_too_large
+                - signature_invalid
+                - signature_required
+                - dependency_failed
+                - internal
+                - unavailable
+            message:
+              type: string
+              description: Human-readable summary. Not for programmatic use.
+            details:
+              type: object
+              description: |
+                Closed structured detail. Handlers must not place raw
+                upstream error strings here.
+              additionalProperties: false
+              properties:
+                field:
+                  type: string
+                reason:
+                  type: string
+
+    TaskState:
+      type: string
+      enum:
+        - new
+        - active
+        - retry
+        - expired
+        - terminated
+        - complete
+        - queue_error
+        - blocked
+        - unreachable
+
+    Task:
+      type: object
+      required: [id, type, state, created, payload]
+      description: |
+        Materialized task. `payload` is base64-encoded, matching the
+        library's `[]byte` JSON encoding. Decode before use. When
+        resubmitting the same payload to `POST /v1/tasks`, place the
+        undecoded base64 string into `payload_base64`.
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        queue:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        dependency_results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/TaskResult'
+        load_dependencies:
+          type: boolean
+        payload:
+          type: string
+          format: byte
+          description: Base64-encoded payload bytes.
+        deadline:
+          type: string
+          format: date-time
+        max_tries:
+          type: integer
+        result:
+          $ref: '#/components/schemas/TaskResult'
+        state:
+          $ref: '#/components/schemas/TaskState'
+        created:
+          type: string
+          format: date-time
+        tried:
+          type: string
+          format: date-time
+        tries:
+          type: integer
+        last_err:
+          type: string
+        signature:
+          type: string
+          description: Hex-encoded ed25519 signature, when present.
+
+    TaskResult:
+      type: object
+      required: [payload, completed]
+      properties:
+        payload:
+          description: Any JSON value returned by the handler.
+        completed:
+          type: string
+          format: date-time
+
+    TaskCreateRequest:
+      type: object
+      required: [type]
+      description: |
+        Provide exactly one of `payload` or `payload_base64`. Setting
+        both yields HTTP 400 with `code: invalid_argument`.
+      properties:
+        type:
+          type: string
+        queue:
+          type: string
+        payload:
+          description: |
+            Any JSON value. The server encodes it to bytes on the task.
+        payload_base64:
+          type: string
+          format: byte
+          description: Pre-encoded payload bytes for non-JSON content.
+        deadline:
+          type: string
+          format: date-time
+          description: Absolute RFC3339 cut-off for starting the task.
+        max_tries:
+          type: integer
+          minimum: 1
+        dependencies:
+          type: array
+          items:
+            type: string
+        load_dependencies:
+          type: boolean
+        signature:
+          type: string
+          description: |
+            Hex-encoded ed25519 signature computed over the library's
+            signing envelope. Required only when the deployment is
+            configured with a `TaskVerificationKey`.
+
+    TaskListResponse:
+      type: object
+      required: [tasks, count]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        count:
+          type: integer
+          description: Number of tasks returned in this response.
+
+    BulkRetryRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 100
+
+    BulkRetryResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkRetryResult'
+
+    BulkRetryResult:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [ok, not_found, failed]
+        error:
+          type: string
+          description: Present when status is not `ok`.
+
+    QueueCreateRequest:
+      type: object
+      required: [name]
+      description: |
+        Duration-typed fields accept Go duration strings such as
+        `30s`, `5m`, or `1h`. Responses return the same durations as
+        int64 nanoseconds — see `QueueInfo`.
+      properties:
+        name:
+          type: string
+        max_age:
+          type: string
+          pattern: '^-?(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$'
+        max_entries:
+          type: integer
+          minimum: 0
+        discard_old:
+          type: boolean
+        max_tries:
+          type: integer
+          minimum: 1
+        max_runtime:
+          type: string
+          pattern: '^-?(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$'
+        max_concurrent:
+          type: integer
+          minimum: 1
+
+    QueueInfo:
+      type: object
+      required: [name]
+      description: |
+        Queue state as returned by the library. Duration fields are
+        int64 nanoseconds (library JSON). Opaque JetStream and consumer
+        detail are never returned; use the NATS tooling if required.
+      properties:
+        name:
+          type: string
+        time:
+          type: string
+          format: date-time
+        max_age:
+          type: integer
+          format: int64
+        max_entries:
+          type: integer
+        discard_old:
+          type: boolean
+        max_tries:
+          type: integer
+        max_runtime:
+          type: integer
+          format: int64
+        max_concurrent:
+          type: integer
+
+    Schedule:
+      type: object
+      required: [name, schedule, queue, task_type, created_at]
+      description: |
+        Scheduled task as stored by the library. `payload` is
+        base64-encoded. `deadline` is an int64 nanosecond duration
+        offset (the library's `time.Duration` JSON form).
+      properties:
+        name:
+          type: string
+        schedule:
+          type: string
+          description: Cron expression.
+        queue:
+          type: string
+        task_type:
+          type: string
+        payload:
+          type: string
+          format: byte
+        deadline:
+          type: integer
+          format: int64
+        max_tries:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ScheduleCreateRequest:
+      type: object
+      required: [name, schedule, queue, task_type]
+      description: |
+        Provide exactly one of `payload` or `payload_base64`.
+      properties:
+        name:
+          type: string
+        schedule:
+          type: string
+          description: Cron expression (standard five-field form).
+        queue:
+          type: string
+        task_type:
+          type: string
+        payload:
+          description: |
+            Any JSON value. The server encodes it to bytes on the task.
+        payload_base64:
+          type: string
+          format: byte
+        deadline_offset:
+          type: string
+          pattern: '^-?(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$'
+          description: |
+            Go duration string (e.g. `30s`). At scheduled enqueue time
+            the task's absolute deadline is computed by adding this
+            offset to creation.
+        max_tries:
+          type: integer
+          minimum: 1
+
+    Info:
+      type: object
+      required: [version, auth]
+      properties:
+        version:
+          type: string
+        auth:
+          type: string
+          description: |
+            Authentication mode the server enforces. `none` when the
+            server accepts any client (deployer is expected to front
+            with a reverse proxy). `mtls` when clients must present a
+            certificate chain that verifies against the configured CA.
+          enum:
+            - none
+            - mtls
+        queue_count:
+          type: integer
+        task_count:
+          type: integer
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    RetryPolicy:
+      type: object
+      required: [name, intervals, jitter]
+      properties:
+        name:
+          type: string
+        intervals:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Retry intervals expressed as nanoseconds.
+        jitter:
+          type: number
+          format: double
+
+    HealthResponse:
+      type: object
+      required: [status, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        time:
+          type: string
+          format: date-time
+
+    ReadinessResponse:
+      type: object
+      required: [ready, checks]
+      properties:
+        ready:
+          type: boolean
+        checks:
+          type: object
+          required: [tasks, config]
+          properties:
+            tasks:
+              $ref: '#/components/schemas/CheckStatus'
+            config:
+              $ref: '#/components/schemas/CheckStatus'
+
+    CheckStatus:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          description: Present when the check failed.

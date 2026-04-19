@@ -1,0 +1,4 @@
+package: gen
+output: server.gen.go
+generate:
+  std-http-server: true
