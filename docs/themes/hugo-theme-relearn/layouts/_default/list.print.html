@@ -1,4 +1,8 @@
-{{- .Scratch.Set "relearnOutputFormat" "PRINT" }}
-{{- partial "header.html" . }}
-{{- partial "content-print.html" . }}
-{{- partial "footer.html" . }}
+{{- define "storeOutputFormat" }}
+	{{- .Store.Set "relearnOutputFormat" "print" }}
+{{- end }}
+{{- define "body" }}
+	{{- partial "bodys/tree.html" . }}
+{{- end }}
+{{- define "menu" }}
+{{- end }}

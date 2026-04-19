@@ -1,12 +1,7 @@
 +++
-chapter = true
-pre = "<b>X. </b>"
 title = "{{ replace .Name "-" " " | title }}"
-weight = 5
+type = "chapter"
+weight = 1
 +++
 
-### Chapter X
-
-# Some Chapter title
-
-Lorem Ipsum.
+This is a new chapter.

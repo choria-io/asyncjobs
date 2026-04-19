@@ -1,14 +1,38 @@
+[Reading-direction]
+other = "ltr"
+
+[Versioning-warning]
+other = 'Esta página muestra la versión {{.pageVersion.title}}. La versión actual se puede encontrar <a href="{{.latestUrl}}">aquí</a>.'
+
+[Search]
+other = "Buscar"
+
 [Search-placeholder]
 other = "Buscar..."
 
+[Clear-search]
+other = "Borrar búsqueda"
+
+[No-results-found]
+other = "No se han encontrado resultados para \"{0}\""
+
+[N-results-found]
+other = "{1} resultados encontrados para \"{0}\""
+
 [Clear-History]
 other = "Borrar Historial"
+
+[Reset-view]
+other = "Restablecer vista"
+
+[View-reset]
+other = "¡Ver reajuste!"
 
 [Attachments-label]
 other = "Adjuntos"
 
 [title-404]
-other = "Error"
+other = "Sin localizar"
 
 [message-404]
 other = "Ups. Parece que la página no existe ¯\\_(ツ)_/¯."
@@ -16,17 +40,26 @@ other = "Ups. Parece que la página no existe ¯\\_(ツ)_/¯."
 [Go-to-homepage]
 other = "Ir al inicio"
 
+[home-button]
+other = "Home"
+
 [Edit-this-page]
 other = "Editar"
 
-[Print-this-chapter]
-other = "Imprimer le chapitre entier"
+[Show-Markdown]
+other = "Mostrar Markdown"
 
-[Shortcuts-Title]
+[Show-source]
+other = "Mostrar código fuente"
+
+[Print-this-chapter]
+other = "Imprimir todo el capítulo"
+
+[More-action]
 other = "Más"
 
-[Expand-title]
-other = "Expandir..."
+[shortcuts-menuTitle]
+other = "Más"
 
 [Navigation-toggle]
 other = "Menú"
@@ -43,11 +76,17 @@ other = "KB"
 [Megabyte-symbol]
 other = "MB"
 
-[note]
-other = "Nota"
+[caution]
+other = "Precaución"
+
+[important]
+other = "Importante"
 
 [info]
 other = "Información"
+
+[note]
+other = "Nota"
 
 [tip]
 other = "Consejo"
@@ -56,13 +95,49 @@ other = "Consejo"
 other = "Aviso"
 
 [Copy-to-clipboard]
-other = "Copiar en el portapapeles"
+other = "Copiar texto al portapapeles"
 
 [Copied-to-clipboard]
-other = "¡Copiado al portapapeles!"
+other = "¡Texto copiado al portapapeles!"
 
 [Copy-link-to-clipboard]
 other = "Copiar enlace al portapapeles"
 
 [Link-copied-to-clipboard]
 other = "¡Enlace copiado al portapapeles!"
+
+[Chapter]
+other = "Capítulo {{.}}"
+
+[Language]
+other = "Idioma"
+
+[Theme]
+other = "Tema"
+
+[Submenu]
+other = "Submenú {{.}}"
+
+[Subsections]
+other = "Subsecciones de {{.}}"
+
+[tags]
+other = "Etiquetas"
+
+[tag]
+other = "Etiqueta"
+
+[categories]
+other = "Categorías"
+
+[category]
+other = "Categoría"
+
+[Details]
+other = "Detalles"
+
+[Version]
+other = "Versión"
+
+[Browser-unsupported-feature]
+other = "Este navegador no admite esta función"

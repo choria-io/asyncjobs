@@ -1,0 +1,34 @@
+{{ with .Site.Title -}}
+    # {{ . }}
+{{- end }}
+
+
+> CCM is a small-scale Configuration Management system designed to meet users where they are - enabling experimentation, R&D, and exploration without the overhead of full-system management while still following sound Configuration Management principles. We focus on great UX, immediate feedback, and interactive use with minimal friction.
+
+## Key Information
+
+{{ range (where (sort ((.Site.GetPage "/").Pages) "Weight" "asc") "Params.sitemap_exclude" "ne" true) -}}
+    - [{{ .Title }}]({{ .Permalink }}index.md): {{ .Description }}
+{{ end }}
+
+## Resource Reference
+
+{{ range (where (sort ((.Site.GetPage "/resources/").Pages) "Weight" "asc") "Params.sitemap_exclude" "ne" true) -}}
+    - [{{ .Title }}]({{ .Permalink }}index.md): {{ .Description }}
+{{ end }}
+
+## Extendibility and Integration
+
+ - [Shell JSON API]({{ (.Site.GetPage "/cli/api/").Permalink }}index.md): Integration point to allow other languages to use ccm resources and types via a STDIN->STDOUT JSON API
+ - [CLI Plugins]({{ (.Site.GetPage "/cli/plugins/").Permalink }}index.md): Extend the `ccm` command with new sub commands and capabilities
+
+## JSON Schemas
+
+### YAML Manifest
+
+ - [manifest.json]({{ .Site.BaseURL }}schemas/v1/manifest.json): Schema for manifest.yaml
+
+### Shell JSON API
+
+ - [resource_ensure_request.json]({{ .Site.BaseURL }}schemas/v1/resource_ensure_request.json): Request schema for the Shell JSON API
+ - [resource_ensure_response.json]({{ .Site.BaseURL }}schemas/v1/resource_ensure_response.json): Response schema for the Shell JSON API

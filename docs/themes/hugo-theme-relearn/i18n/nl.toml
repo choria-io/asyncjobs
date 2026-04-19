@@ -1,14 +1,38 @@
+[Reading-direction]
+other = "ltr"
+
+[Versioning-warning]
+other = 'Deze pagina toont versie {{.pageVersion.title}}. De huidige versie is te vinden <a href="{{.latestUrl}}">hier</a>.'
+
+[Search]
+other = "Zoeken"
+
 [Search-placeholder]
 other = "Zoeken..."
 
+[Clear-search]
+other = "Zoekopdracht wissen"
+
+[No-results-found]
+other = "Geen resultaten gevonden voor \"{0}\""
+
+[N-results-found]
+other = "{1} resultaten gevonden voor \"{0}\""
+
 [Clear-History]
 other = "Wis geschiedenis"
+
+[Reset-view]
+other = "Weergave opnieuw instellen"
+
+[View-reset]
+other = "Opnieuw instellen weergeven!"
 
 [Attachments-label]
 other = "Bijlagen"
 
 [title-404]
-other = "Error"
+other = "Niet gelokaliseerd"
 
 [message-404]
 other = "Blijkbaar bestaat deze pagina niet ¯\\_(ツ)_/¯."
@@ -16,17 +40,26 @@ other = "Blijkbaar bestaat deze pagina niet ¯\\_(ツ)_/¯."
 [Go-to-homepage]
 other = "Naar startpagina"
 
+[home-button]
+other = "Home"
+
 [Edit-this-page]
 other = "Bewerken"
+
+[Show-Markdown]
+other = "Afprijzing weergeven"
+
+[Show-source]
+other = "Broncode weergeven"
 
 [Print-this-chapter]
 other = "Het hele hoofdstuk afdrukken"
 
-[Shortcuts-Title]
+[More-action]
 other = "Snelkoppelingen"
 
-[Expand-title]
-other = "Lees meer..."
+[shortcuts-menuTitle]
+other = "Snelkoppelingen"
 
 [Navigation-toggle]
 other = "Menu"
@@ -43,11 +76,17 @@ other = "KB"
 [Megabyte-symbol]
 other = "MB"
 
-[note]
-other = "Notitie"
+[caution]
+other = "Let op"
+
+[important]
+other = "Belangrijk"
 
 [info]
 other = "Info"
+
+[note]
+other = "Notitie"
 
 [tip]
 other = "Fooi"
@@ -56,13 +95,49 @@ other = "Fooi"
 other = "Waarschuwing"
 
 [Copy-to-clipboard]
-other = "Naar klembord kopiëren"
+other = "Tekst naar klembord kopiëren"
 
 [Copied-to-clipboard]
-other = "Gekopieerd naar klembord!"
+other = "Tekst gekopieerd naar klembord!"
 
 [Copy-link-to-clipboard]
 other = "Link naar klembord kopiëren"
 
 [Link-copied-to-clipboard]
 other = "Link gekopieerd naar klembord!"
+
+[Chapter]
+other = "Hoofdstuk {{.}}"
+
+[Language]
+other = "Taal"
+
+[Theme]
+other = "Thema"
+
+[Submenu]
+other = "Submenu {{.}}"
+
+[Subsections]
+other = "Subsecties van {{.}}"
+
+[tags]
+other = "Tags"
+
+[tag]
+other = "Tag"
+
+[categories]
+other = "Categorieën"
+
+[category]
+other = "Categorie"
+
+[Details]
+other = "Details"
+
+[Version]
+other = "Versie"
+
+[Browser-unsupported-feature]
+other = "Deze browser ondersteunt deze functie niet"
