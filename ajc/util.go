@@ -144,13 +144,13 @@ func newTableWriter(title string) *tablewriter.Table {
 	return table
 }
 
-func showConfig(cfg *nats.KeyValueBucketStatus) {
-	si := cfg.StreamInfo()
+func showConfig(cfg jetstream.KeyValueStatus) {
+	kcfg := cfg.Config()
 
 	fmt.Printf("Configuration Storage: \n\n")
-	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(si.State.Msgs)), humanize.IBytes(si.State.Bytes))
-	fmt.Printf("    Memory Based: %t\n", si.Config.Storage == nats.MemoryStorage)
-	fmt.Printf("        Replicas: %d\n", si.Config.Replicas)
+	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(cfg.Values())), humanize.IBytes(cfg.Bytes()))
+	fmt.Printf("    Memory Based: %t\n", kcfg.Storage == jetstream.MemoryStorage)
+	fmt.Printf("        Replicas: %d\n", kcfg.Replicas)
 }
 
 func showTasks(tasks *asyncjobs.TasksInfo) {

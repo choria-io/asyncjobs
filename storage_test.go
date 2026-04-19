@@ -15,6 +15,7 @@ import (
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -157,7 +158,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = storage.configBucket.Put("scheduled_tasks.test", []byte("{invalid"))
+				_, err = storage.configBucket.Put(context.Background(), "scheduled_tasks.test", []byte("{invalid"))
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = storage.LoadScheduledTaskByName("test")
@@ -215,7 +216,7 @@ var _ = Describe("Storage", func() {
 				err = storage.SaveScheduledTask(st, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				e, err := storage.configBucket.Get(fmt.Sprintf("scheduled_tasks.%s", st.Name))
+				e, err := storage.configBucket.Get(context.Background(), fmt.Sprintf("scheduled_tasks.%s", st.Name))
 				Expect(err).ToNot(HaveOccurred())
 				st = &ScheduledTask{}
 				err = json.Unmarshal(e.Value(), st)
@@ -253,10 +254,10 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				kvs, err := storage.configBucket.Status()
+				kvs, err := storage.configBucket.Status(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config.Storage).To(Equal(nats.MemoryStorage))
+				Expect(kvs.Config().Storage).To(Equal(jetstream.MemoryStorage))
 			})
 		})
 
@@ -268,11 +269,10 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(false, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				kvs, err := storage.configBucket.Status()
+				kvs, err := storage.configBucket.Status(context.Background())
 				Expect(err).ToNot(HaveOccurred())
-				stream := kvs.(*nats.KeyValueBucketStatus).StreamInfo().Config
-				Expect(stream.MaxMsgsPerSubject).To(Equal(int64(1)))
-				Expect(stream.Storage).To(Equal(nats.FileStorage))
+				Expect(kvs.History()).To(Equal(int64(1)))
+				Expect(kvs.Config().Storage).To(Equal(jetstream.FileStorage))
 			})
 		})
 	})

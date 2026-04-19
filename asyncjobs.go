@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/nats-io/jsm.go"
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -34,7 +33,7 @@ type StorageAdmin interface {
 	PurgeQueue(name string) error
 	DeleteQueue(name string) error
 	PrepareQueue(q *Queue, replicas int, memory bool) error
-	ConfigurationInfo() (*nats.KeyValueBucketStatus, error)
+	ConfigurationInfo() (jetstream.KeyValueStatus, error)
 	PrepareConfigurationStore(memory bool, replicas int) error
 	PrepareTasks(memory bool, replicas int, retention time.Duration) error
 	DeleteTaskByID(id string) error
