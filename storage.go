@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/textproto"
@@ -20,6 +21,7 @@ import (
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -66,10 +68,11 @@ var defaultBlockedNakTime = 5 * time.Second
 type jetStreamStorage struct {
 	nc  *nats.Conn
 	mgr *jsm.Manager
+	js  jetstream.JetStream
 
 	tasks           *taskStorage
-	configBucket    nats.KeyValue
-	leaderElections nats.KeyValue
+	configBucket    jetstream.KeyValue
+	leaderElections jetstream.KeyValue
 	retry           RetryPolicyProvider
 
 	qStreams   map[string]*jsm.Stream
@@ -105,6 +108,11 @@ func newJetStreamStorage(nc *nats.Conn, rp RetryPolicyProvider, log Logger) (*je
 	}
 
 	s.mgr, err = jsm.New(nc)
+	if err != nil {
+		return nil, err
+	}
+
+	s.js, err = jetstream.New(nc)
 	if err != nil {
 		return nil, err
 	}
@@ -497,17 +505,15 @@ func (s *jetStreamStorage) PrepareQueue(q *Queue, replicas int, memory bool) err
 	return s.createQueue(q, replicas, memory)
 }
 
-func (s *jetStreamStorage) ConfigurationInfo() (*nats.KeyValueBucketStatus, error) {
+func (s *jetStreamStorage) ConfigurationInfo() (jetstream.KeyValueStatus, error) {
 	if s.configBucket == nil {
 		return nil, fmt.Errorf("%w: configuration bucket not configured", ErrStorageNotReady)
 	}
 
-	st, err := s.configBucket.Status()
-	if err != nil {
-		return nil, err
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	return st.(*nats.KeyValueBucketStatus), nil
+	return s.configBucket.Status(ctx)
 }
 
 func (s *jetStreamStorage) TasksInfo() (*TasksInfo, error) {
@@ -575,7 +581,10 @@ func (s *jetStreamStorage) DeleteScheduledTaskByName(name string) error {
 		return fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
 	}
 
-	return s.configBucket.Delete(fmt.Sprintf("scheduled_tasks.%s", name))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return s.configBucket.Delete(ctx, fmt.Sprintf("scheduled_tasks.%s", name))
 }
 
 func (s *jetStreamStorage) ScheduledTasks(ctx context.Context) ([]*ScheduledTask, error) {
@@ -586,7 +595,7 @@ func (s *jetStreamStorage) ScheduledTasks(ctx context.Context) ([]*ScheduledTask
 	wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	watch, err := s.configBucket.Watch("scheduled_tasks.*", nats.Context(wctx))
+	watch, err := s.configBucket.Watch(wctx, "scheduled_tasks.*")
 	if err != nil {
 		return nil, err
 	}
@@ -601,7 +610,7 @@ func (s *jetStreamStorage) ScheduledTasks(ctx context.Context) ([]*ScheduledTask
 				return tasks, nil
 			}
 
-			if entry.Operation() != nats.KeyValuePut {
+			if entry.Operation() != jetstream.KeyValuePut {
 				continue
 			}
 
@@ -625,7 +634,7 @@ func (s *jetStreamStorage) ScheduledTasksWatch(ctx context.Context) (chan *Sched
 		return nil, fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
 	}
 
-	watch, err := s.configBucket.Watch("scheduled_tasks.*", nats.Context(ctx))
+	watch, err := s.configBucket.Watch(ctx, "scheduled_tasks.*")
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +650,7 @@ func (s *jetStreamStorage) ScheduledTasksWatch(ctx context.Context) (chan *Sched
 					continue
 				}
 
-				if entry.Operation() == nats.KeyValueDelete || entry.Operation() == nats.KeyValuePurge {
+				if entry.Operation() == jetstream.KeyValueDelete || entry.Operation() == jetstream.KeyValuePurge {
 					parts := strings.Split(entry.Key(), ".")
 					tasks <- &ScheduleWatchEntry{
 						Name:   parts[len(parts)-1],
@@ -678,9 +687,12 @@ func (s *jetStreamStorage) LoadScheduledTaskByName(name string) (*ScheduledTask,
 		return nil, fmt.Errorf("%w: scheduled storage not prepared", ErrStorageNotReady)
 	}
 
-	e, err := s.configBucket.Get(fmt.Sprintf("scheduled_tasks.%s", name))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	e, err := s.configBucket.Get(ctx, fmt.Sprintf("scheduled_tasks.%s", name))
 	if err != nil {
-		if err == nats.ErrKeyNotFound {
+		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return nil, ErrScheduledTaskNotFound
 		}
 
@@ -709,10 +721,13 @@ func (s *jetStreamStorage) SaveScheduledTask(st *ScheduledTask, update bool) err
 	key := fmt.Sprintf("scheduled_tasks.%s", st.Name)
 	var rev uint64
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	if update {
-		rev, err = s.configBucket.Put(key, stj)
+		rev, err = s.configBucket.Put(ctx, key, stj)
 	} else {
-		rev, err = s.configBucket.Create(key, stj)
+		rev, err = s.configBucket.Create(ctx, key, stj)
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "wrong last sequence") {
@@ -727,25 +742,21 @@ func (s *jetStreamStorage) SaveScheduledTask(st *ScheduledTask, update bool) err
 }
 
 func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) error {
-	var err error
-
 	if replicas == 0 {
 		replicas = 1
 	}
 
-	js, err := s.nc.JetStream()
-	if err != nil {
-		return err
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	storage := nats.FileStorage
+	storage := jetstream.FileStorage
 	if memory {
-		storage = nats.MemoryStorage
+		storage = jetstream.MemoryStorage
 	}
 
-	kv, err := js.KeyValue(ConfigBucketName)
-	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+	kv, err := s.js.KeyValue(ctx, ConfigBucketName)
+	if errors.Is(err, jetstream.ErrBucketNotFound) {
+		kv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 			Bucket:      ConfigBucketName,
 			Description: "Choria Async Jobs Configuration",
 			Storage:     storage,
@@ -758,9 +769,9 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 
 	s.configBucket = kv
 
-	kv, err = js.KeyValue(LeaderElectionBucketName)
-	if err == nats.ErrBucketNotFound {
-		kv, err = js.CreateKeyValue(&nats.KeyValueConfig{
+	ekv, err := s.js.KeyValue(ctx, LeaderElectionBucketName)
+	if errors.Is(err, jetstream.ErrBucketNotFound) {
+		ekv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 			Bucket:      LeaderElectionBucketName,
 			Description: "Choria Async Jobs Leader Elections",
 			Storage:     storage,
@@ -772,7 +783,7 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 		return err
 	}
 
-	s.leaderElections = kv
+	s.leaderElections = ekv
 
 	return nil
 
@@ -908,7 +919,7 @@ func (s *jetStreamStorage) TasksStore() (*jsm.Manager, *jsm.Stream, error) {
 }
 
 // ElectionStorage gives access to the key-value store used for elections
-func (s *jetStreamStorage) ElectionStorage() (nats.KeyValue, error) {
+func (s *jetStreamStorage) ElectionStorage() (jetstream.KeyValue, error) {
 	if s.leaderElections == nil {
 		return nil, fmt.Errorf("%s: election bucket not configured", ErrStorageNotReady)
 	}

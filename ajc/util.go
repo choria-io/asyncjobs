@@ -17,6 +17,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 	"github.com/xlab/tablewriter"
 	"golang.org/x/term"
@@ -143,13 +144,13 @@ func newTableWriter(title string) *tablewriter.Table {
 	return table
 }
 
-func showConfig(cfg *nats.KeyValueBucketStatus) {
-	si := cfg.StreamInfo()
+func showConfig(cfg jetstream.KeyValueStatus) {
+	kcfg := cfg.Config()
 
 	fmt.Printf("Configuration Storage: \n\n")
-	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(si.State.Msgs)), humanize.IBytes(si.State.Bytes))
-	fmt.Printf("    Memory Based: %t\n", si.Config.Storage == nats.MemoryStorage)
-	fmt.Printf("        Replicas: %d\n", si.Config.Replicas)
+	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(cfg.Values())), humanize.IBytes(cfg.Bytes()))
+	fmt.Printf("    Memory Based: %t\n", kcfg.Storage == jetstream.MemoryStorage)
+	fmt.Printf("        Replicas: %d\n", kcfg.Replicas)
 }
 
 func showTasks(tasks *asyncjobs.TasksInfo) {
@@ -167,24 +168,23 @@ func showTasks(tasks *asyncjobs.TasksInfo) {
 	}
 }
 
-func showElectionStatus(kv nats.KeyValue) {
-	status, err := kv.Status()
-	if err != nil {
-		return
-	}
-	kvs := status.(*nats.KeyValueBucketStatus)
-	si := kvs.StreamInfo()
-
+func showElectionStatus(kv jetstream.KeyValue) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
+	status, err := kv.Status(ctx)
+	if err != nil {
+		return
+	}
+	cfg := status.Config()
+
 	fmt.Printf("Leader Elections:\n\n")
 
-	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(si.State.Msgs)), humanize.IBytes(si.State.Bytes))
-	fmt.Printf("    Memory Based: %t\n", si.Config.Storage == nats.MemoryStorage)
-	fmt.Printf("        Replicas: %d\n", si.Config.Replicas)
+	fmt.Printf("         Entries: %s @ %s\n", humanize.Comma(int64(status.Values())), humanize.IBytes(status.Bytes()))
+	fmt.Printf("    Memory Based: %t\n", cfg.Storage == jetstream.MemoryStorage)
+	fmt.Printf("        Replicas: %d\n", cfg.Replicas)
 	fmt.Printf("       Elections: \n")
-	keys, err := kv.Keys(nats.Context(ctx))
+	keys, err := kv.Keys(ctx)
 	if err != nil {
 		fmt.Printf("                  Could not determine election status: %v\n", err)
 		return
@@ -195,7 +195,7 @@ func showElectionStatus(kv nats.KeyValue) {
 	}
 
 	for _, k := range keys {
-		entry, err := kv.Get(k)
+		entry, err := kv.Get(ctx, k)
 		if err != nil {
 			fmt.Printf("                  Could not get value for %v: %v", k, err)
 		}
