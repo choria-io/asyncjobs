@@ -26,6 +26,8 @@ type queueCommand struct {
 	memory        bool
 	replicas      int
 	discardOld    bool
+	maxBytes      int64
+	maxBytesSet   bool
 }
 
 func configureQueueCommand(app *fisk.Application) {
@@ -43,6 +45,7 @@ func configureQueueCommand(app *fisk.Application) {
 	add.Flag("memory", "Store the Queue in memory").BoolVar(&c.memory)
 	add.Flag("replicas", "Number of storage replicas to configure").Default("1").IntVar(&c.replicas)
 	add.Flag("discard-old", "When full, discard old entries").BoolVar(&c.discardOld)
+	add.Flag("max-bytes", "Maximum bytes that can be stored in the queue, -1 for unlimited").Default("-1").IsSetByUser(&c.maxBytesSet).Int64Var(&c.maxBytes)
 
 	queues.Command("list", "List Queues").Alias("ls").Action(c.lsAction)
 
@@ -65,6 +68,7 @@ func configureQueueCommand(app *fisk.Application) {
 	cfg.Flag("run-time", "Maximum run-time to allow per task").Default("-1s").DurationVar(&c.maxTime)
 	cfg.Flag("concurrent", "Maximum concurrent jobs that can be ran").Default("-2").IntVar(&c.maxConcurrent)
 	cfg.Flag("replicas", "Number of storage replicas to configure").Default("-1").IntVar(&c.replicas)
+	cfg.Flag("max-bytes", "Maximum bytes that can be stored in the queue, -1 for unlimited").Default("-1").IsSetByUser(&c.maxBytesSet).Int64Var(&c.maxBytes)
 }
 
 func (c *queueCommand) addAction(_ *fisk.ParseContext) error {
@@ -86,6 +90,10 @@ func (c *queueCommand) addAction(_ *fisk.ParseContext) error {
 		MaxTries:      c.maxTries,
 		MaxRunTime:    c.maxTime,
 		MaxConcurrent: c.maxConcurrent,
+	}
+
+	if c.maxBytesSet {
+		queue.MaxBytes = c.maxBytes
 	}
 
 	err = admin.PrepareQueue(queue, c.replicas, c.memory)
@@ -144,6 +152,10 @@ func (c *queueCommand) configureAction(_ *fisk.ParseContext) error {
 	}
 	if c.maxConcurrent > -2 {
 		ccfg.MaxAckPending = c.maxConcurrent
+	}
+
+	if c.maxBytesSet {
+		scfg.MaxBytes = c.maxBytes
 	}
 
 	mgr, _, err := admin.TasksStore()

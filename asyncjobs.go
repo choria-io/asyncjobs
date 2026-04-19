@@ -22,6 +22,8 @@ const (
 	DefaultMaxTries = 10
 	// DefaultQueueMaxConcurrent when not configured for a queue this is the default concurrency setting
 	DefaultQueueMaxConcurrent = 100
+	// DefaultMaxBytes when not configured for a queue defaults to 10Mb
+	DefaultMaxBytes = 10485760
 )
 
 // StorageAdmin is helpers to support the CLI mainly, this leaks a bunch of details about JetStream
@@ -34,8 +36,8 @@ type StorageAdmin interface {
 	DeleteQueue(name string) error
 	PrepareQueue(q *Queue, replicas int, memory bool) error
 	ConfigurationInfo() (*nats.KeyValueBucketStatus, error)
-	PrepareConfigurationStore(memory bool, replicas int) error
-	PrepareTasks(memory bool, replicas int, retention time.Duration) error
+	PrepareConfigurationStore(memory bool, replicas int, maxBytes int64, maxBytesSet bool) error
+	PrepareTasks(memory bool, replicas int, retention time.Duration, maxBytes int64, maxBytesSet bool) error
 	DeleteTaskByID(id string) error
 	TasksInfo() (*TasksInfo, error)
 	Tasks(ctx context.Context, limit int32) (chan *Task, error)
@@ -68,8 +70,8 @@ type Storage interface {
 	TerminateItem(ctx context.Context, item *ProcessItem) error
 	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)
 	PrepareQueue(q *Queue, replicas int, memory bool) error
-	PrepareTasks(memory bool, replicas int, retention time.Duration) error
-	PrepareConfigurationStore(memory bool, replicas int) error
+	PrepareTasks(memory bool, replicas int, retention time.Duration, maxBytes int64, maxBytesSet bool) error
+	PrepareConfigurationStore(memory bool, replicas int, maxBytes int64, maxBytesSet bool) error
 	SaveScheduledTask(st *ScheduledTask, update bool) error
 	LoadScheduledTaskByName(name string) (*ScheduledTask, error)
 	DeleteScheduledTaskByName(name string) error
