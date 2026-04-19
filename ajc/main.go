@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -56,7 +57,7 @@ func main() {
 
 		default:
 			fmt.Fprintf(os.Stderr, "ajc runtime error: %v\n", err)
-			if err != asyncjobs.ErrNoTasks {
+			if !errors.Is(err, asyncjobs.ErrNoTasks) {
 				fmt.Fprintln(os.Stderr)
 				ajc.Usage(os.Args[1:])
 			}
