@@ -1,27 +1,47 @@
-baseURL = "https://choria-io.github.io/asyncjobs/"
+baseURL = "https://choria-cm.dev/"
 languageCode = "en-us"
-title = "Choria Async Jobs Documentation"
+title = "Choria Configuration Manager"
 theme = "hugo-theme-relearn"
-canonifyURLs = true
+
+[outputFormats.TXT]
+mediaType = "text/plain"
+baseName = "llms"
+isPlainText = true
 
 [outputs]
-home = [ "HTML", "RSS", "JSON"]
+home = [ "html", "rss", "print", "markdown", "txt"]
+section = [ "html", "rss", "print", "markdown"]
+page = [ "html",  "print", "markdown"]
+
+[author]
+name = "Choria Project"
 
 [params]
-author = "Choria Project"
 showVisitedLinks = false
 disableLanguageSwitchingButton = true
-themeVariant = "asyncjobs"
+#themeVariant = "ccm"
 disableInlineCopyToClipBoard = true
 alwaysopen = true
+collapsibleMenu = true
+externalLinkTargetc= "_self"
 
 [markup]
-  [markup.highlight]
-    # if set to `guessSyntax = true`, there will be no unstyled code even if no language
-    # was given BUT mermaid code fences will not work anymore! So this is a mandatory
-    # setting for your site
-    guessSyntax = false
-    style = "tango"
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+[[params.themeVariant]]
+    auto = ['zen-light', 'ccm']
+    identifier = 'zen-auto'
+    name = 'Auto Theme'
+
+[[params.themeVariant]]
+    identifier = 'zen-light'
+    name = 'Light'
+
+[[params.themeVariant]]
+    identifier = 'ccm'
+    name = 'Dark'
 
 [[menu.shortcuts]]
 name = "<i class='fab fa-fw fa-github'></i> GitHub"
@@ -46,5 +66,5 @@ weight = 13
 
 [[menu.shortcuts]]
 name = "<i class='fab fa-slack'></i> #choria"
-url = "https://slack.puppet.com/"
+url = "https://short.voxpupu.li/puppetcommunity_slack_signup"
 weight = 14
