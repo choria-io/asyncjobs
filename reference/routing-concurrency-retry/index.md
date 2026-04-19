@@ -1,19 +1,19 @@
 # Routing, Concurrency, Retry
 
-Processing Tasks is what it's all about, so, this is an important topic to explore and understand. It is quite simple in the general case but there are some nuances to be aware of.
+Processing tasks is the core of the system. The general case is straightforward, but several nuances are worth knowing.
 
-Handlers are how Tasks get executed, typically this is code you provide written in Go.
+Handlers execute tasks. Handlers are typically code supplied by the caller, written in Go.
 
-For a non Go solution see [Remote Request Reply Handlers](../request-reply/), but reading this page is still good for a grounding understanding since remote Handlers map exactly onto the same concepts.
+For a non-Go solution, see [Remote Request-Reply Handlers](../request-reply/). This page still provides useful grounding, since remote handlers map directly onto the same concepts.
 
 ## Example
 
-Below is a handler that sends an email, the task Payload is a serialized object describing an email to send.  The deadlines and timeouts are extracted from the Context and the mail is sent.
+The following handler sends an email. The task payload is a serialized object describing the email. Deadlines and timeouts come from the context.
 
-The Task handler then is a single-purpose piece of code capable of handling 1 type of Task.
+A task handler is a single-purpose piece of code capable of handling one type of task.
 
 ```go
-func emailNewHandler(ctx context.Context, log asycjobs.Logger, task *asyncjobs.Task) (any, error) {
+func emailNewHandler(ctx context.Context, log asyncjobs.Logger, task *asyncjobs.Task) (any, error) {
 	// Parse the task payload into an email
 	email, err := parseEmail(task.Payload)
 	if err != nil { return nil, err }
@@ -42,11 +42,11 @@ func emailNewHandler(ctx context.Context, log asycjobs.Logger, task *asyncjobs.T
 }
 ```
 
-## Routing Tasks to Handlers
+## Routing tasks to handlers
 
-Every client that processes messages must be ready to process all messages found in the Queue. So if you have an `EMAIL` queue, all running clients must be able to handle all Tasks.
+Every client that processes messages must be ready to process every message found in the queue. A client connected to an `EMAIL` queue must handle every task on that queue.
 
-Should there be no appropriate handler the message will fail and enter retries.
+A message with no matching handler fails and enters retries.
 
 Task delivery is handled by `asyncjobs.Mux` which today is quite minimal, we plan to support Middleware and more later.
 
@@ -58,25 +58,25 @@ router.HandleFunc("", emailPassthroughHandler)
 client.Run(ctx, router)
 ```
 
-Here we set up the above example handler to handle `email:new` messages and register an handler for other messages.  A handler could be set to handle `email:` messages and it would process all unhandled email related messages.
+The router above dispatches `email:new` tasks to `emailNewHandler` and all other tasks to `emailPassthroughHandler`. A handler registered for `email:` would process all unmatched email-related tasks.
 
 ## Concurrency
 
-There are 2 kinds of Concurrency control in effect at any time: Client and Queue.
+Two kinds of concurrency control are in effect at any time: client and queue.
 
-### Client Concurrency
+### Client concurrency
 
-Every client can limit how many concurrent tasks it wish to handle. You might have 4 cores in your instance and so want to run only 4 Handlers at a time.
+Every client can limit how many concurrent tasks it handles. A host with four cores might run only four handlers at a time.
 
 ```go
 client, err := asyncjobs.NewClient(asyncjobs.ClientConcurrency(runtime.NumCPU()))
 ```
 
-Here we set the client to use `runtime.NumCPU()` to dynamically allocate maximum concurrency based on available logical CPUs.
+`runtime.NumCPU()` dynamically allocates maximum concurrency based on available logical CPUs.
 
-### Queue Concurrency
+### Queue concurrency
 
-When many clients are active against a specific Queue they would all get jobs according to the limit above. You might also want to limit the overall concurrency of all email processing regardless of how many clients you have.  With 10 clients each set to allow 10 concurrent you would be handling 100 tasks, but if you know your infrastructure can only support 50 at a time you can limit this on the Queue.
+When many clients are active against a specific queue, each receives jobs up to its own limit. Overall concurrency across a queue can also be capped. With 10 clients, each allowing 10 concurrent tasks, the total would be 100; an infrastructure that only supports 50 at a time can enforce that on the queue.
 
 ```go
 queue := &asyncjobs.Queue{
@@ -86,13 +86,13 @@ queue := &asyncjobs.Queue{
 client, err := asyncjobs.NewClient(asyncjobs.WorkQueue(queue))
 ```
 
-This would create a new Queue the first time and set it to 50 maximum concurrent handlers - regardless of how many your clients start.
+This creates a new queue on first use and caps it at 50 concurrent handlers, regardless of how many clients start.
 
-You can adjust this once created using `ajc queue configure EMAIL --concurrent 100`.
+Adjust the value after creation with `ajc queue configure EMAIL --concurrent 100`.
 
-## Task Runtime and Max Tries
+## Task runtime and max tries
 
-The Queue defines how long a Task can be processed, a Task that is not done being processed by that timeout will result in a retry - on the assumption that the handler has crashed. You should set the timeout carefully to avoid duplicate task handling.
+The queue defines how long a task can be processed. A task still running past that timeout is retried, on the assumption that the handler has crashed. Choose the timeout carefully to avoid duplicate handling.
 
 ```go
 queue := &asyncjobs.Queue{
@@ -102,20 +102,20 @@ queue := &asyncjobs.Queue{
 }
 ```
 
-Above we define a Queue that will allow a task to be handled for up to 1 hour and will retry it 100 times. Care should be taken to pick these values correctly.
+The queue above allows a task to be handled for up to one hour and retries up to 100 times. Choose these values with care.
 
-The `ajc` command line utility can adjust these times post-creation but running clients will still create context Deadlines based on the configuration that was set when they were started.
+The `ajc` CLI can adjust these values post-creation. Running clients still build context deadlines from the configuration present when they were started.
 
-## Terminating Processing
+## Terminating processing
 
-In the earlier example we had these 2 lines:
+The earlier example contained:
 
 ```go
 email, err := parseEmail(task.Payload)
 if err != nil { return nil, err }
 ```
 
-This would return the parse error from your Handler, the task would then go and get retried later. Thing is if this is a bad Payload it will never pass processing, invalid JSON will always be invalid JSON.  You might want to give up on the task early:
+This returns the parse error from the handler, and the task is retried later. A bad payload will never parse; invalid JSON will always be invalid JSON. In that case, give up on the task immediately:
 
 ```go
 email, err := parseEmail(task.Payload)
@@ -124,18 +124,18 @@ if err != nil {
 }
 ```
 
-Here we return an error that is a `asyncjobs.ErrTerminateTask`, the task would then be terminated immediately, no future tries will be done and the task state will be set to `TaskStateTerminated`.
+The returned error wraps `asyncjobs.ErrTerminateTask`. The task is terminated immediately, no further retries run, and the state is set to `TaskStateTerminated`.
 
-## Retry Schedules
+## Retry schedules
 
-When a client determines that a Task has failed and needs to be retried it does so based on a `RetryPolicy`. The default policy is to retry at increasing intervals between 1 minute and 10 minutes with a jitter applied.
+When the client determines that a task has failed and must be retried, it consults a `RetryPolicy`. The default retries at increasing intervals between one and ten minutes, with jitter applied.
 
-To change to a 50 step policy ranging between 10 minutes and 1 hour use:
+To switch to a 50-step policy ranging from 10 minutes to 1 hour:
 
 ```go
 client, err := asyncjobs.NewClient(RetryBackoffPolicy(asyncjobs.RetryLinearOneHour))
 ```
 
-We have `RetryLinearTenMinutes`, `RetryLinearOneHour` and `RetryLinearOneMinute` pre-defined.
+The predefined policies are `RetryLinearTenMinutes`, `RetryLinearOneHour`, and `RetryLinearOneMinute`.
 
-You can create your own schedule - perhaps based on an exponential backoff - by filling in your values in `asyncjobs.RetryPolicy` or by implementing the `asyncjobs.RetryPolicyProvider` interface.
+Custom schedules, such as exponential backoff, can be built by populating `asyncjobs.RetryPolicy` or by implementing the `asyncjobs.RetryPolicyProvider` interface.

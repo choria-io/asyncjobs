@@ -1,18 +1,16 @@
 # Golang Walkthrough
 
-This is a basic walkthrough of publishing Tasks and handling Tasks in Go. A more thorough guide will be written in time.
+This walkthrough covers publishing tasks and handling them in Go. A more thorough guide is planned. Complete [Go reference documentation](https://pkg.go.dev/github.com/choria-io/asyncjobs) is available on pkg.go.dev.
 
-This is an introductory guide, we have extensive [Go reference documentation](https://pkg.go.dev/github.com/choria-io/asyncjobs).
-
-This guide is known to work with Release 0.0.4
+The guide is known to work with Release 0.0.4.
 
 ## Connecting to JetStream
 
-A connection to a JetStream server is needed, you can either prepare a connecting yourself or pass in the name of a [NATS Context](https://docs.nats.io/using-nats/nats-tools/nats_cli#nats-contexts)
+A connection to a JetStream server is required. Either a prepared NATS connection or the name of a [NATS Context](https://docs.nats.io/using-nats/nats-tools/nats_cli#nats-contexts) can be passed in.
 
-NATS have a plethora of connection methods, security approaches, TLS or non TLS and even supports Websockets - you can configure it any way you wish. See the [nats.go](https://github.com/nats-io/nats.go/) package for details.
+NATS supports many connection methods, security approaches, TLS or non-TLS, and websockets. See the [nats.go](https://github.com/nats-io/nats.go/) package for details.
 
-First an example passing in a already prepared nats connection:
+Passing in a prepared NATS connection:
 
 ```go
 nc, err := nats.Connect("localhost:4222")
@@ -22,20 +20,20 @@ client, err := asyncjobs.NewClient(asyncjobs.NatsConn(nc))
 panicIfErr(err)
 ```
 
-Or if you have a NATS Context called `AJC` you can use it:
+Using a NATS Context called `AJC`:
 
 ```go
 client, err := asyncjobs.NewClient(asyncjobs.NatsContext("AJC"))
 panicIfErr(err)
 ```
 
-In both cases a number of options can be supplied to log disconnections, reconnections and more.
+In both cases, additional options can log disconnections, reconnections, and more.
 
-## Configuring Queues
+## Configuring queues
 
-A Queue is where messages go, you can have many different, named, queues if you wish.  If you do not specify any Queue a default one is made called `DEFAULT`.
+A queue holds messages for processing. Many named queues can coexist. Without an explicit queue, a default called `DEFAULT` is used.
 
-You might make different Queues to set different concurrency limits, different max attempts, maximum validity and more.
+Different queues support different concurrency limits, maximum attempts, and validity periods.
 
 ```go
 queue := &asyncjobs.Queue{Name: "EMAIL", MaxRunTime: 60 * time.Minute, MaxTries: 50}
@@ -44,15 +42,15 @@ client, err := asyncjobs.NewClient(asyncjobs.NatsContext("EMAIL"), asyncjobs.Wor
 panicIfErr(err)
 ```
 
-Here we attach to or create a new queue called `EMAIL` setting some specific options.  If the queue already exist we will just attach but not update configuration. You can prevent on-demand creation by setting `NoCreate: true`. See [go doc for details](https://pkg.go.dev/github.com/choria-io/asyncjobs@main#Queue).
+The call attaches to or creates a queue called `EMAIL` with specific options. If the queue exists, the client attaches without updating the configuration. Setting `NoCreate: true` prevents on-demand creation. See the [Queue reference](https://pkg.go.dev/github.com/choria-io/asyncjobs@main#Queue) for details.
 
-## Creating and Enqueueing Tasks
+## Creating and enqueueing tasks
 
-A task can be anything you wish as long as it can serialize to JSON. Tasks have types like `email:new`, `email-new` or really anything you want, we'll see later how task types interact with the routing system.
+A task can carry any payload that serializes to JSON. Task types such as `email:new` or `email-new` drive routing to handlers.
 
-Any number of producers can create tasks from any number of different processes.
+Any number of producers can create tasks from any number of processes.
 
-First we have a simplistic helper to create a map that describes an email:
+A helper creates a map describing an email:
 
 ```go
 func newEmail(to, subject, body string) any {
@@ -60,7 +58,7 @@ func newEmail(to, subject, body string) any {
 }
 ```
 
-Now we can create a new email task and enqueue it:
+A new email task can then be created and enqueued:
 
 ```go
 client, err := asyncjobs.NewClient(
@@ -79,11 +77,11 @@ panicIfErr(err)
 
 The task is sent to the store and placed in the `EMAIL` work queue for processing.
 
-## Consuming and Processing Tasks
+## Consuming and processing tasks
 
-Messages are consumed and handled by matching their type and from a specific Queue. Task processors can run concurrently across different processes and each processes can process a number of tasks concurrently. Per-process and per-Queue concurrency limits can be set.
+Messages are consumed and handled by matching their type on a specific queue. Task processors can run concurrently across processes, and each process can handle multiple tasks concurrently. Per-process and per-queue concurrency limits are configurable.
 
-We'll show a few more options than typical to get a feel for what's possible.
+The following example uses more options than typical:
 
 ```go
 client, err := asyncjobs.NewClient(
@@ -110,15 +108,15 @@ err = router.Handler("email:new", func(ctx context.Context, log asyncjobs.Logger
 })
 panicIfErr(err)
 
-err = client.Run(ctx, routeR)
+err = client.Run(ctx, router)
 panicIfErr(err)
 ```
 
-Here we registered one handler for `email:new` and a callback that will handle that task up to 10 at a time.
+The example registers one handler for `email:new` with a callback that handles up to 10 tasks at a time.
 
 ## Loading a task
 
-Existing tasks can be loaded which will include their status and other details:
+Existing tasks can be loaded, including their status and other details:
 
 ```go
 client, err := asyncjobs.NewClient(asyncjobs.NatsContext("EMAIL"))

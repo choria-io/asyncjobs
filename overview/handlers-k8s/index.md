@@ -1,18 +1,18 @@
 # Handlers in K8s
 
-We publish Helm charts to deploy the system to Kubernetes.
+Helm charts are published to deploy the system to Kubernetes.
 
 ## Requirements
 
 ### NATS Server with JetStream
 
-You need a NATS JetStream server, if you are a Choria User you can enable [Choria Streams](https://choria.io/docs/streams/) otherwise the NATS Community has their own [NATS Helm Charts](https://choria.io/docs/streams/).
+A NATS JetStream server is required. Choria users can enable [Choria Streams](https://choria.io/docs/streams/). The NATS community publishes its own [NATS Helm Charts](https://choria.io/docs/streams/).
 
-### Connection Context
+### Connection context
 
-We use NATS Contexts to configure the connection between asyncjobs and NATS. If you already have a context configured using the [NATS CLI](https://github.com/nats-io/natscli) then use `nats context show CONTEXTNAME --json` to get the keys and values to configure.
+NATS Contexts configure the connection between asyncjobs and NATS. For an existing context configured through the [NATS CLI](https://github.com/nats-io/natscli), run `nats context show CONTEXTNAME --json` to retrieve the keys and values.
 
-For me I needed some TLS Certificates to authenticate to NATS along with the context, so we made a secret called `task-scheduler-tls` holding that, you can put NATS credential files and more in the same manner:
+TLS certificates for NATS authentication can be stored in a secret called `task-scheduler-tls`. NATS credential files and similar data fit the same pattern:
 
 ```
 $ find asyncjobs/task-scheduler
@@ -23,27 +23,27 @@ asyncjobs/task-scheduler/secret/ca.crt
 $ kubectl -n asyncjobs create secret generic task-scheduler-tls --from-file asyncjobs/task-scheduler/secret
 ```
 
-### Choria Helm Repository
+### Choria Helm repository
 
-Choria has it's own Helm repository that you need to import:
+Import the Choria Helm repository:
 
 ```
 $ helm repo add choria https://choria-io.github.io/helm
 $ helm repo update
 ```
 
-### Kubernetes Namespace
+### Kubernetes namespace
 
-We suggest running the asyncjobs components in a namespace:
+Run the asyncjobs components in a dedicated namespace:
 
 ```
 $ kubectl create namespace asyncjobs
 namespace/asyncjobs created
 ```
 
-## Task Scheduler
+## Task scheduler
 
-Here I show a basic values file for the Task Scheduler, it will run 2 replicas with one being active:
+A basic values file for the Task Scheduler runs two replicas, with one active:
 
 ```yaml
 # asyncjobs-task-scheduler-values.yaml
@@ -59,7 +59,7 @@ taskScheduler:
     cert: /etc/asyncjobs/secret/tls.crt
 ```
 
-We reference the secret added earlier.
+The values file references the secret added earlier.
 
 ```
 $ helm install --namespace asyncjobs --values asyncjobs-task-scheduler-values.yaml task-scheduler choria/asyncjobs-task-scheduler

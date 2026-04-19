@@ -1,12 +1,12 @@
 # Request-Reply Handlers
 
-Typically, and for best performance, you implement your handlers in Go and compile them into the binary.
+Handlers are typically implemented in Go and compiled into the binary for best performance.
 
-In order to support other programming languages we also support calling out over NATS in a [Request-Reply](https://docs.nats.io/nats-concepts/core-nats/reqreply) fashion to a service that can be programmed in any language.
+Other programming languages are supported through [NATS Request-Reply](https://docs.nats.io/nats-concepts/core-nats/reqreply). A remote service can be written in any language and called out to over NATS.
 
-It's worth understanding [Routing, Handlers, Concurrency and Retry](../routing-concurrency-retry/) for background, these remote callout Handlers map exactly onto that model.
+Review [Routing, Handlers, Concurrency, and Retry](../routing-concurrency-retry/) first for background. Remote handlers map directly onto the same model.
 
-## Registering with the Router
+## Registering with the router
 
 ```go
 client, _ := asyncjobs.NewClient(asyncjobs.NatsConn(nc), asyncjobs.BindWorkQueue("EMAIL"))
@@ -17,41 +17,41 @@ router.RequestReply("email:new", client)
 client.Run(router)
 ```
 
-Here we register with the Router for tasks of type `email:new` that will call out via Request-Reply.
+This registers with the router for tasks of type `email:new`. Tasks of that type are dispatched via NATS Request-Reply.
 
-If all your Handlers are of this type I strongly suggest investigating our [Docker Based Runner](../overview/handlers-docker/) that can achieve this without writing any Go code.
+When all handlers in a deployment use request-reply, the [Docker-based runner](../overview/handlers-docker/) achieves the same outcome without any Go code.
 
 ## Protocol
 
-We implement a light-weight JSON + Headers protocol to communicate with remote services. They support returning errors including the `ErrTerminateTask` behavior.
+A lightweight JSON-plus-headers protocol communicates with the remote service. The protocol supports returning errors, including the `ErrTerminateTask` behavior.
 
-Your service must listen on `CHORIA_AJ.H.T.email:new` - most probably in a queue group - where you would replace `email:new` with whatever you chose as a task type. A handler that is registered with task type `""` will handle all tasks of all types and the handling service should listen on `CHORIA.AJ.H.T.catchall`.
+The service must listen on `CHORIA_AJ.H.T.email:new`, typically in a NATS queue group, replacing `email:new` with the configured task type. A handler registered with task type `""` handles all tasks, and the service listens on `CHORIA.AJ.H.T.catchall`.
 
 ### Tasks
 
-A request for a Task Handler will have these headers:
+A request for a task handler carries these headers:
 
 | Header                | Value                               |
 |-----------------------|-------------------------------------|
 | `AJ-Content-Type`     | `application/x-asyncjobs-task+json` |
 | `AJ-Handler-Deadline` | `2009-11-10T23:00:00Z`              |
 
-The content-type is same for all Tasks, the Deadline is a UTC timestamp indicating by what time the remote service has to complete handling the task to avoid timeouts.
+The content type is identical for all tasks. The deadline is a UTC timestamp by which the remote service must complete handling to avoid a timeout.
 
-The body is simply a JSON format `Task`.
+The body is a JSON-encoded `Task`.
 
-Responses from your service can have these headers:
+Responses from the service may set these headers:
 
 | Header         | Description                                                                                                                    |
 |----------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `AJ-Error`     | Indicates an error was encountered, the value is set as task error, the task is retried later                                  |
-| `AJ-Terminate` | Terminates the task via `ErrTerminateTask`, the value will be set as additional text in the error. No further retries are done |
+| `AJ-Error`     | Indicates an error was encountered; the value is set as the task error and the task is retried later                           |
+| `AJ-Terminate` | Terminates the task via `ErrTerminateTask`; the value becomes additional text in the error. No further retries are performed   |
 
-The body of your response is taken and stored with the Task unmodified.
+The body of the response is stored on the task unmodified.
 
 ## Demonstration
 
-To see this in action, we can use the `nats` CLI tool.
+The `nats` CLI tool shows this in action:
 
 ```
 $ nats reply CHORIA_AJ.H.T.email:new 'success' --context AJC
@@ -62,7 +62,7 @@ $ nats reply CHORIA_AJ.H.T.email:new 'success' --context AJC
 {"id":"24smZHaWnjuP371iglxeQWK7nOi","type":"email:new","queue":"DEFAULT","payload":"InsuLi4ufSI=","state":"active","created":"2022-02-09T17:28:41.943198067Z","tried":"2022-02-09T17:33:33.005041134Z","tries":5}
 ```
 
-The CLI received the jobs with the 2 headers set and appropriate payload, it responsed with `success` and the task was completed.
+The CLI received the job with the two headers set and the expected payload, responded with `success`, and the task completed.
 
 ```
 $ ajc task view 24smZHaWnjuP371iglxeQWK7nOi --json

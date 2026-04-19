@@ -1,18 +1,18 @@
 # Lifecycle Events
 
-Lifecycle events are small JSON messages that are published to notify about various stages of processing and the life of a client.
+Lifecycle events are small JSON messages published to notify observers about stages of task processing and client life.
 
-Today the only event we support is one notifying about changes in Task State but more will be added. In future we will support emitting Cloud Event standard events.
+Only one event type is supported today: a notification about changes to task state. Additional events will follow. A future release will emit Cloud Events standard messages.
 
-Events are not guaranteed to be delivered and are not persisted, they are informational. While you can use them to build a kind of coupled system of waiting for a task to complete you should not rely on these events to be delivered in 100% of cases.
+Events are informational. Delivery is not guaranteed and events are not persisted. They can loosely couple systems that react to task completion, but they must not be relied on for exactly-once or guaranteed notification.
 
-## Event Types
+## Event types
 
-Each event has a type like `io.choria.asyncjobs.v1.task_state` aka `asyncjobs.TaskStateChangeEventType` that can help with parsing and routing of events through other systems.
+Each event carries a type such as `io.choria.asyncjobs.v1.task_state`, exposed in Go as `asyncjobs.TaskStateChangeEventType`. The type string aids parsing and routing through other systems.
 
 ## Parsing an event
 
-We provide a helper to parse any supported event and to process them using the common go type switch pattern.
+A helper parses any supported event for use with the common Go type-switch pattern:
 
 ```go
 // subscribe to all events
@@ -36,11 +36,11 @@ for {
 
 ## `TaskStateChangeEvent`
 
-This event type is published for any state change of a Task, using it you can watch a task by ID or all tasks.
+This event is published for any state change of a task. A task can be watched by ID, or all tasks can be watched at once.
 
-These events are published to `CHORIA_AJ.E.task_state.*` with the last token being the Job ID.
+These events are published to `CHORIA_AJ.E.task_state.*`, where the final token is the job ID.
 
-On the wire the messages look like here, with `task_age` being a go Duration.
+On the wire, the messages look like this. The `task_age` field is a Go duration.
 
 ```json
 {

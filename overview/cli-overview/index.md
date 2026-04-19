@@ -1,16 +1,12 @@
 # CLI Walkthrough
 
-This is a basic walkthrough of publishing Tasks and handling them using the CLI.
+This walkthrough covers publishing tasks and handling them with the CLI. It mirrors the [Introductory Golang Walkthrough](../golang-overview/), with shell commands in place of Go code.
 
-This is essentially the CLI version of [Introductory Golang Walkthrough](../golang-overview/).
-
-This guide is known to work with Release 0.0.4
-
-We have a similar [video walkthrough](https://www.youtube.com/watch?v=yRbPCpGsgq4) that discuss the CLI and related topics.
+The guide is known to work with Release 0.0.4. A [video walkthrough](https://www.youtube.com/watch?v=yRbPCpGsgq4) covers the same material.
 
 ## Requirements
 
-You'll need the [NATS CLI](github.com/nats-io/natscli), an optional JetStream Server and the Async Jobs CLI,
+The [NATS CLI](github.com/nats-io/natscli), an optional JetStream server, and the Async Jobs CLI are required.
 
 ```
 $ go install github.com/choria-io/asyncjobs/ajc@v0.0.4
@@ -18,13 +14,13 @@ $ go install github.com/choria-io/asyncjobs/ajc@v0.0.4
 
 ### JetStream
 
-If you have an existing JetStream server add a context to connect to it:
+For an existing JetStream server, add a context to connect to it:
 
 ```
 $ nats context add AJC --server jetstream.example.net:4222
 ```
 
-If you do not yet have JetStream you can start a local development copy easily, it will create a `AJC` context for you:
+For a local development server, run the following. The command creates an `AJC` context automatically.
 
 ```
 $ nats server run --jetstream AJC
@@ -46,11 +42,11 @@ $ nats server run --jetstream AJC
 [21398] [INF] Server is ready
 ```
 
-## Creating Queues
+## Creating queues
 
-A Queue is where messages go, you can have many different, named, queues if you wish. If you do not specify any Queue a default one is made called DEFAULT.
+A queue holds messages for processing. Many named queues can coexist. Without an explicit queue, a default called `DEFAULT` is used.
 
-You might make different Queues to set different concurrency limits, different max attempts, maximum validity and more.
+Different queues support different concurrency limits, maximum attempts, and validity periods.
 
 ```
 $ ajc queue add EMAIL --run-time 1h --tries 50
@@ -66,13 +62,13 @@ EMAIL Work Queue:
      Max Entries: unlimited
 ```
 
-Here we attach to or create a new queue called EMAIL setting some specific options.
+The command attaches to or creates a queue called `EMAIL` with specific options.
 
-## Creating and Enqueueing Tasks
+## Creating and enqueueing tasks
 
-A task can be anything you wish as long as it can serialize to JSON. Tasks have types like email:new, email-new or really anything you want, we'll see later how task types interact with the routing system.
+A task can carry any payload that serializes to JSON. Task types such as `email:new` or `email-new` drive routing to handlers.
 
-Any number of producers can create tasks from any number of different processes.
+Any number of producers can create tasks from any number of processes.
 
 ```
 $ ajc task add --queue EMAIL email:new '{"to":"user@example.net", "subject":"Test Subject", "body":"Test Body"}'
@@ -86,9 +82,9 @@ Task 24YUZF4MzOCLgI7kpwrGtT4lYnS created at 02 Feb 22 13:04:26 UTC
                 Tries: 0
 ```
 
-## Consuming and Processing Tasks
+## Consuming and processing tasks
 
-The CLI can process tasks through a shell command, lets create a basic command
+The CLI can process tasks through a shell command. Create a basic command:
 
 ```
 $ touch /tmp/send-email.sh
@@ -102,7 +98,7 @@ $ chmod a+x /tmp/send-email.sh
 echo '{"status":"success"}'
 ```
 
-Now lets run the jobs in our EMAIL queue, 5 concurrently:
+Run jobs from the `EMAIL` queue, five concurrently:
 
 ```
 $ ajc task process "" EMAIL 5 /tmp/send-email.sh --monitor 8080
@@ -111,9 +107,9 @@ INFO[0000] Running task 24YUZF4MzOCLgI7kpwrGtT4lYnS try 1
 INFO[0000] Task 24YUZF4MzOCLgI7kpwrGtT4lYnS completed after 2.425439ms and 1 tries with 18 B payload
 ```
 
-This will process all tasks - `""` task type - via `/tmp/send-email.sh`. You can curl to `http://localhost:8080/metrics` to see Prometheus stats.
+The empty task type matches all tasks. Prometheus stats are exposed at `http://localhost:8080/metrics`.
 
-Afterward your task will be shown as done:
+After processing, the task shows as done:
 
 ```
 $ ajc task view 24YUZF4MzOCLgI7kpwrGtT4lYnS
@@ -126,9 +122,9 @@ Task 24YUZF4MzOCLgI7kpwrGtT4lYnS created at 02 Feb 22 13:04:26 UTC
                 Tries: 1
 ```
 
-## Watching Tasks Processing
+## Watching tasks processing
 
-You can view tasks processing through their life cycle using the CLI:
+Tasks can be watched through their life cycle:
 
 ```
 $ ajc task watch
@@ -137,9 +133,9 @@ $ ajc task watch
 [13:08:41] 24YUZF4MzOCLgI7kpwrGtT4lYnS: queue: EMAIL type: email:new tries: 1 state: complete
 ```
 
-## Listing Queues and Tasks
+## Listing queues and tasks
 
-You can see all your queues with some basic statusses:
+List all queues with basic status:
 
 ```
 $ ajc queue ls
@@ -153,7 +149,7 @@ $ ajc queue ls
 ╰─────────┴───────┴───────┴──────────┴───────────┴───────────┴────────────────╯
 ```
 
-You can see tasks and their statusses:
+List tasks and their status:
 
 ```
 $ ajc task ls
@@ -167,7 +163,7 @@ $ ajc task ls
 ╰─────────────────────────────┴───────────┴────────────────────────┴──────────┴─────────┴───────╯
 ```
 
-And a general overview:
+Show a general overview:
 
 ```
 $ ajc info

@@ -1,19 +1,17 @@
 # Security
 
-Sometimes you want to run a handler in a insecure location and want to be sure it only executes tasks from trusted creators.
+Handlers sometimes run in untrusted locations and must only execute tasks from trusted creators.
 
-Tasks can be signed using ed25519 private keys and clients can be configured to only accept tasks created and signed using
-a specific key.  We support requiring all tasks are signed when keys are configured (the default), or accepting unsigned tasks
-but requiring signed tasks are verified.
+Tasks can be signed with ed25519 private keys. Clients can be configured to accept only tasks created and signed with a specific key. When keys are configured, signatures on all tasks are required by default. Clients can also be configured to accept unsigned tasks, while still verifying signatures when present.
 
-First we need to create some keys, these should be saved to a file encoded using `hex.Encode()`.
+Create keys and save them to a file using `hex.Encode()`:
 
 ```go
 pubk, prik, err = ed25519.GenerateKey(nil)
 panicIfErr(err)
 ```
 
-Then we can configure the client:
+Configure the client:
 
 ```go
 client, err := asyncjobs.NewClient(
@@ -31,8 +29,6 @@ client, err := asyncjobs.NewClient(
 panicIfErr(err)
 ```
 
-On the command line the `ajc tasks` command has `--sign` and `--verify` flags which can either be hex encoded keys
-or paths to files holding them in hex encoded format.
+On the command line, `ajc tasks` supports `--sign` and `--verify` flags. Each accepts either a hex-encoded key or a path to a file containing a hex-encoded key.
 
-Docker containers built using `ajc package docker` can set a key in the environment variable `AJ_VERIFICATION_KEY` and
-can opt into optional signatures at build time by setting `task_signatures_optional: true` in the `asyncjobs.yaml`.
+Docker containers built with `ajc package docker` can set a key via the `AJ_VERIFICATION_KEY` environment variable. Optional signatures can be enabled at build time by setting `task_signatures_optional: true` in `asyncjobs.yaml`.

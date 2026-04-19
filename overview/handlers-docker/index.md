@@ -1,12 +1,12 @@
 # Handlers in Docker
 
-We want to make it really easy to run handler services in Docker, toword that version `0.0.4` introduces a packager that can create containers on your behalf.
+Version `0.0.4` introduces a packager that builds handler containers from configuration.
 
-## Preparing Handlers
+## Preparing handlers
 
-### Go Based
+### Go based
 
-The idea is that you would create a Handler per Go package, the packager will then pull in all the configured handlers into a small microservice.
+One handler per Go package is recommended. The packager pulls configured handlers into a small microservice.
 
 ```go
 package handler
@@ -20,15 +20,15 @@ func AsyncJobHandler(ctx context.Context, log aj.Logger, task *aj.Task) (any, er
 }
 ```
 
-Place this in any package you like, for example `git.example.com/example/email/new`. You can have many handlers, as long as they are in packages like here.
+Place this in any package, for example `git.example.com/example/email/new`. Multiple handlers are supported as long as each resides in its own package.
 
-### Other Languages
+### Other languages
 
-Other languages are supported using NATS Request-Reply, implement them according to the protocol describe in [Remote Request-Reply Handlers](../../reference/request-reply/).
+Other languages are supported through NATS Request-Reply. Implement them against the protocol described in [Remote Request-Reply Handlers](../../reference/request-reply/).
 
 ## Packaging
 
-In a empty directory create a file `asyncjobs.yaml` with the following content:
+In an empty directory, create a file `asyncjobs.yaml` with the following content:
 
 ```yaml
 # The NATS Context to connect with.
@@ -45,7 +45,7 @@ queue: EMAIL
 name: git.example.com/example
 
 # The version of github.com/choria-io/asyncjobs to use,
-# something go get would accept. Defeaults to the same
+# something go get would accept. Defaults to the same
 # as the CLI version
 asyncjobs: latest
 
@@ -71,11 +71,11 @@ tasks:
     command: webhook/call.sh
 ```
 
-We set up a `remote: true` Task handler for `audit:log` Tasks, this will delegate to external processes, see [Remote Request Reply Handlers](../../reference/request-reply/).
+The `audit:log` handler uses `remote: true` and delegates to external processes. See [Remote Request-Reply Handlers](../../reference/request-reply/).
 
-The `webhook:call` Task handler is a shell script that should exist in `commands/webhook/call.sh`, it will be copied into the container. It's most likely you will need dependencies not in the default container, I suggest using the generated one as a `FROM` container to derive one with your dependencies met via the alpine package system.
+The `webhook:call` handler is a shell script that must exist at `commands/webhook/call.sh` and is copied into the container. Handlers often need dependencies absent from the default container. Use the generated container as a `FROM` base and add dependencies through the alpine package system.
 
-Next we create our package:
+Generate the package:
 
 ```
 $ ajc package docker
@@ -109,7 +109,7 @@ total 12
 drwxrwxr-x 3 rip rip   19 Feb  8 17:48 commands
 ```
 
-You see we have a `main.go` that will be built into a container:
+A `main.go` is generated and built into a container:
 
 ```
 $ docker build . --tag example/email:latest
@@ -118,7 +118,7 @@ $ docker push example/email:latest
 
 ## Running
 
-The container will rely on a NATS Context for connectivity options, lets create one in the same directory:
+The container relies on a NATS Context for connectivity. Create one in the same directory:
 
 ```
 $ pwd 
@@ -130,7 +130,7 @@ NATS Configuration Context "AJ_EMAIL"
              Path: /home/myname/work/email_service/nats/context/AJ_EMAIL.json
 ```
 
-We can now run it:
+Run the container:
 
 ```
 $ docker run -ti -v "/home/myname/work/email_service/nats:/handler/config/nats" -p 8080:8080 --rm example/email:latest
@@ -138,17 +138,17 @@ INFO[19:07:39] Connecting using Context AJ_EMAIL consuming work queue EMAIL with
 WARN[19:07:39] Exposing Prometheus metrics on port 8080
 ```
 
-Note we mount the `nats` configuration directory into `/handler/config/nats` which is where the container will look for the context configuration.  Should you need other supporting files like credentials you can place them in the container and reference them at their in-container paths.
+The `nats` configuration directory is mounted to `/handler/config/nats`, where the container looks for the context. Additional files such as credentials can be placed in the container and referenced at their in-container paths.
 
-## Environment Configuration
+## Environment configuration
 
-A few environment variables can be set to influence the container:
+The following environment variables influence the container:
 
 | Variable          | Description                                                              | YAML Item |
 |-------------------|--------------------------------------------------------------------------|-----------|
-| `AJ_WORK_QUEUE`   | The name of the Queue to connect to                                      | `queue`   |
+| `AJ_WORK_QUEUE`   | The name of the queue to connect to                                      | `queue`   |
 | `AJ_NATS_CONTEXT` | The NATS context to use for connectivity                                 | `nats`    |
-| `XDG_CONFIG_HOME` | The prefix for NATS Context configuration, defaults to `/handler/config` |           |
+| `XDG_CONFIG_HOME` | The prefix for NATS context configuration, defaults to `/handler/config` |           |
 | `AJ_CONCURRENCY`  | The number of workers to run, defaults to `runtime.NumCPU()`             |           |
 | `AJ_DEBUG`        | Set to `1` to enable debug logging                                       |           |
-| `AJ_RETRY_POLICY` | Sets the Retry Backoff Policy, one of `10m`, `1h`, `1m`, `default`       | `retry`   |
+| `AJ_RETRY_POLICY` | Sets the retry backoff policy, one of `10m`, `1h`, `1m`, `default`       | `retry`   |

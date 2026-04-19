@@ -1,16 +1,16 @@
 # Scheduled Tasks
 
-The Task Scheduler allows you to create cron like entries that will create Tasks on demand.
+The Task Scheduler supports cron-like entries that create tasks on demand.
 
-This requires a separate process to be run that will supervise the configured schedules and create the tasks.  We have such a Scheduler built into the `ajc` binary deployable in any container manager.
+A separate supervisor process evaluates the configured schedules and creates the tasks. The supervisor is built into the `ajc` binary and is deployable in any container manager.
 
-The scheduler we provide support being deployed in a highly-available cluster, they will perform leader election with one of the cluster scheduling tasks. There is no need to restart or signal these schedulers as tasks are added, removed or updated.
+The scheduler supports highly-available clusters. Members perform leader election, and one member schedules tasks at a time. Restarts and signals are not required when schedules are added, removed, or updated.
 
-You can [Deploy to Kubernetes](../handlers-k8s/) using our Helm Charts, or run anywhere else as per below guide.
+[Deploying to Kubernetes](../handlers-k8s/) is supported through Helm charts. The scheduler can also run anywhere else, as described below.
 
-## Schedule Overview
+## Schedule overview
 
-A Scheduled task takes a Cron like Schedule and some Task related properties and will then create new jobs on demand using those properties as templates.
+A scheduled task combines a cron-like schedule with task properties. The scheduler creates new jobs on demand, using those properties as templates.
 
 ```go
 // ScheduledTask represents a cron like schedule and task properties that will
@@ -35,18 +35,17 @@ type ScheduledTask struct {
 }
 ```
 
-Valid schedules are like those for the common unix utility cron, including the syntaxes like `*/5` and so forth. Short cuts for `@yearly`, `@monthly`, `@weekly`, `@daily` and `@hourly` are supported in addition to `@every 10m` where `10m` is a Go standard duration.
-
+Valid schedules use the common unix cron format, including syntax like `*/5`. Shortcuts such as `@yearly`, `@monthly`, `@weekly`, `@daily`, and `@hourly` are supported, along with `@every 10m`, where `10m` is a Go standard duration.
 
 ## Go API
 
-Adding and loading Scheduled Tasks is a lot like a normal task:
+Adding and loading scheduled tasks resembles working with a normal task:
 
 ```go
-client, _ := aj.NewClient(asyncjobs.NatsContext("AJC"))
+client, _ := asyncjobs.NewClient(asyncjobs.NatsContext("AJC"))
 
-// The deadline being an hour from now will result in a Schedule Task with a 1 hour deadline set
-task, _ := aj.NewTask("email:monthly", nil, aj.TaskDeadlin(time.Now().Add(time.Hour)))
+// The deadline being an hour from now results in a Scheduled Task with a 1 hour deadline set
+task, _ := asyncjobs.NewTask("email:monthly", nil, asyncjobs.TaskDeadline(time.Now().Add(time.Hour)))
 
 // Create the schedule
 err := client.NewScheduledTask("EMAIL_MONTHLY_UPDATE", "@monthly", "EMAIL", task)
@@ -60,9 +59,9 @@ err = client.RemoveScheduledTask("EMAIL_MONTHLY_UPDATE")
 
 ## CLI management
 
-Below a quick overview of the CLI, the CLI is brand new so some aspects might change.
+The CLI is new, and some aspects may change.
 
-### Adding and Removing Scheduled Tasks
+### Adding and removing scheduled tasks
 
 ```
 $ ajc task cron add EMAIL_MONTHLY_UPDATE "0 0 1 * *" email:monthly --queue EMAIL --deadline 12h
@@ -75,15 +74,15 @@ Scheduled Task EMAIL_MONTHLY_UPDATE created at 17 Feb 22 17:40:37 UTC
   Scheduling Deadline: 12h0m0s
 ```
 
-We add a scheduled task that will run monthly (Could also use `monthly` instead of cron format), it will create a task with type `email:monthly` in the `EMAIL` queue and we set a deadline on the task 12 hours after creation.
+The command adds a scheduled task that runs monthly. The shortcut `monthly` also works. Each run creates a task of type `email:monthly` in the `EMAIL` queue with a 12-hour deadline from creation.
 
-To enter the schedule `@yearly` use just "yearly" as the CLI package will interpret the `@`.
+To enter the `@yearly` schedule, use just `yearly`. The CLI interprets the `@`.
 
-Given the name, you can remove it again with `ajc task cron delete EMAIL_MONTHLY_UPDATE`, it supports `-f` for non interactive.
+Remove a scheduled task by name with `ajc task cron delete EMAIL_MONTHLY_UPDATE`. The `-f` flag makes the command non-interactive.
 
 ### Viewing schedules
 
-A list of schedules can be loaded:
+List all schedules:
 
 ```
 $ ajc task cron list
@@ -98,7 +97,7 @@ $ ajc task cron list --names
 EMAIL_MONTHLY_UPDATE
 ```
 
-A single schedule can be viewed:
+View a single schedule:
 
 ```
 $ ajc task cron view EMAIL_MONTHLY_UPDATE
@@ -109,7 +108,7 @@ Scheduled Task EMAIL_MONTHLY_UPDATE created at 17 Feb 22 17:40:37 UTC
             Task Type: email:monthly
               Payload: 0 B
   Scheduling Deadline: 12h0m0s
-$ ajc task cron viww EMAIL_MONTHLY_UPDATE --json
+$ ajc task cron view EMAIL_MONTHLY_UPDATE --json
 {
   "name": "EMAIL_MONTHLY_UPDATE",
   "schedule": "0 0 1 * *",
@@ -122,11 +121,11 @@ $ ajc task cron viww EMAIL_MONTHLY_UPDATE --json
 }
 ```
 
-## Running the Scheduler
+## Running the scheduler
 
-You can [Deploy to Kubernetes](../handlers-k8s/) using our Helm Charts, or run anywhere else as per below guide.
+[Deploying to Kubernetes](../handlers-k8s/) is supported through Helm charts. The scheduler can also run elsewhere using the CLI below.
 
-Each scheduler needs an, ideally unique, name. This will be used in some logs and in leader elections.
+Each scheduler needs a name, ideally unique. The name appears in logs and in leader elections.
 
 ```
 $ ajc task cron scheduler $(hostname -f) --monitor 8080 --context AJC
@@ -136,11 +135,14 @@ INFO[19:21:29] Loaded 1 scheduled task(s)
 INFO[19:21:42] Became leader, tasks will be scheduled
 ```
 
-As Scheduled jobs are added or removed logs will be logged and updates about scheduling tasks will be shown.  Prometheus metrics is on port 8080 in `/metrics`.
+Logs record schedule additions, schedule removals, and task-creation events. Prometheus metrics are served at port 8080 on `/metrics`.
 
-You can run as many schedulers as you want, they will do leader elections, all will log Schedule updates but only one will create Tasks. **NOTE** there's a chance that during a leadership change some tasks will not be scheduled, this is something we will resolve later.
+Any number of schedulers can run. Members perform leader election. All members log schedule updates, but only the leader creates tasks.
 
-When running `ajc info` will have some details:
+> [!info] Note
+> During a leadership change, some tasks may not be scheduled. A later release will address this.
+
+The `ajc info` output includes scheduler state:
 
 ```
 $ ajc info
@@ -155,4 +157,4 @@ Leader Elections:
 ...
 ```
 
-Here we see the current leader of the `task_scheduler` election group is the instance above.
+The current leader of the `task_scheduler` election group appears in the output.
