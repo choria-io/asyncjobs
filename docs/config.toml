@@ -1,6 +1,6 @@
-baseURL = "https://choria-cm.dev/"
+baseURL = "https://choria-io.github.io/asyncjobs/"
 languageCode = "en-us"
-title = "Choria Configuration Manager"
+title = "Choria Async Jobs"
 theme = "hugo-theme-relearn"
 
 [outputFormats.TXT]

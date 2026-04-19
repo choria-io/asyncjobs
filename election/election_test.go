@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ var _ = Describe("Leader Election", func() {
 
 	BeforeEach(func() {
 		skipValidate = false
+		skipSplay = false
 		srv, nc = startJSServer(GinkgoT())
 		js, err = nc.JetStream()
 		Expect(err).ToNot(HaveOccurred())
@@ -141,6 +143,10 @@ var _ = Describe("Leader Election", func() {
 					OnLost(func() {
 						defer GinkgoRecover()
 
+						// lostCb fires during shutdown for whichever instance was leader
+						if ctx.Err() != nil {
+							return
+						}
 						Fail("Other election was lost")
 					}))
 				Expect(err).ToNot(HaveOccurred())
@@ -200,6 +206,121 @@ var _ = Describe("Leader Election", func() {
 			if maxActive > 1 {
 				Fail(fmt.Sprintf("Had %d leaders", maxActive))
 			}
+		})
+
+		It("Should unblock a running Start when Stop is called", func() {
+			skipValidate = true
+			skipSplay = true
+
+			elect, err := NewElection("n1", "stop.key", kv, WithDebug(debugger))
+			Expect(err).ToNot(HaveOccurred())
+
+			done := make(chan error, 1)
+			go func() {
+				done <- elect.Start(context.Background())
+			}()
+
+			time.Sleep(500 * time.Millisecond)
+			elect.Stop()
+
+			Eventually(done, 5*time.Second).Should(Receive(BeNil()))
+		})
+
+		It("Should report state transitions via State and IsLeader", func() {
+			skipValidate = true
+			skipSplay = true
+
+			elect, err := NewElection("n1", "state.key", kv, WithDebug(debugger))
+			Expect(err).ToNot(HaveOccurred())
+
+			// pre-Start
+			Expect(elect.IsLeader()).To(BeFalse())
+			Expect(elect.State()).To(Equal(UnknownState))
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() { elect.Start(ctx) }()
+
+			// with no competition IsLeader must become true after the first successful maintain tick
+			Eventually(elect.IsLeader, 3*time.Second, 50*time.Millisecond).Should(BeTrue())
+			Expect(elect.State()).To(Equal(LeaderState))
+		})
+
+		It("Should fire OnLost during shutdown when leader", func() {
+			skipValidate = true
+			skipSplay = true
+
+			var wins, losses int32
+			wonCh := make(chan struct{}, 1)
+
+			elect, err := NewElection("n1", "shutdown.key", kv,
+				OnWon(func() {
+					atomic.AddInt32(&wins, 1)
+					select {
+					case wonCh <- struct{}{}:
+					default:
+					}
+				}),
+				OnLost(func() {
+					atomic.AddInt32(&losses, 1)
+				}),
+				WithDebug(debugger))
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				elect.Start(ctx)
+			}()
+
+			Eventually(wonCh, 3*time.Second).Should(Receive())
+			cancel()
+			Eventually(done, 3*time.Second).Should(BeClosed())
+
+			Expect(atomic.LoadInt32(&wins)).To(Equal(int32(1)))
+			Expect(atomic.LoadInt32(&losses)).To(Equal(int32(1)))
+		})
+
+		It("Should not fire OnLost when leadership is lost before announcement", func() {
+			skipValidate = true
+			skipSplay = true
+
+			var (
+				wins         int32
+				losses       int32
+				leaderSeen   int32
+				sabotageOnce sync.Once
+				sabotageDone = make(chan struct{})
+			)
+
+			elect, err := NewElection("n1", "preannounce.key", kv,
+				OnWon(func() { atomic.AddInt32(&wins, 1) }),
+				OnLost(func() { atomic.AddInt32(&losses, 1) }),
+				OnCampaign(func(state State) {
+					// The first time a tick runs in Leader state we are
+					// between Create-success and the first maintain. Delete
+					// the key so the imminent Update fails — this must NOT
+					// fire OnLost because OnWon was never announced.
+					if state == LeaderState && atomic.CompareAndSwapInt32(&leaderSeen, 0, 1) {
+						sabotageOnce.Do(func() {
+							Expect(kv.Delete("preannounce.key")).ToNot(HaveOccurred())
+							close(sabotageDone)
+						})
+					}
+				}),
+				WithDebug(debugger))
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			go func() { elect.Start(ctx) }()
+
+			Eventually(sabotageDone, 3*time.Second).Should(BeClosed())
+			// give the leader one more tick (cInterval ≈ 562ms at 750ms TTL) to attempt and fail the maintain
+			time.Sleep(1500 * time.Millisecond)
+
+			Expect(atomic.LoadInt32(&losses)).To(Equal(int32(0)), "OnLost must not fire before OnWon was announced")
 		})
 	})
 })
