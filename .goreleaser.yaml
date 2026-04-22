@@ -28,7 +28,7 @@ builds:
         goarch: arm
 
 archives:
-  - name_template: "nats-{{.Version}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}"
+  - name_template: "asyncjobs-{{.Version}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}"
     wrap_in_directory: true
     formats:
       - tar.gz

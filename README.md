@@ -72,6 +72,27 @@ client.Run(ctx, router)
 
 See our [documentation](https://choria-io.github.io/asyncjobs/) for a deep dive into the use cases, architecture, abilities and more.
 
+## HTTP API
+
+Non-Go services and operators can use asyncjobs over HTTP. The CLI ships an `ajc server run` subcommand that exposes the OpenAPI 3.0 surface defined in [`api/openapi.yaml`](api/openapi.yaml).
+
+```
+# create the queue the API will accept tasks for
+ajc queue add EMAIL --run-time 1h
+
+# launch the server on loopback
+ajc server run --queue EMAIL
+```
+
+```
+# enqueue a task
+curl -sf -X POST http://127.0.0.1:8080/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"type":"email:new","payload":{"to":"user@example.net"}}'
+```
+
+The server performs no authentication. For non-loopback deployments, front it with a reverse proxy that terminates authn, or configure mTLS via `--tls-cert`/`--tls-key`/`--tls-client-ca`. The full surface — deployment recipes, endpoint catalog, error envelope, payload encoding quirks, and client generation guidance — lives in the [HTTP API documentation](https://choria-io.github.io/asyncjobs/reference/http-api/).
+
 ## Requirements
 
 NATS 2.8.0 or newer with JetStream enabled.

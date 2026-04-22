@@ -56,6 +56,7 @@ See [Scheduled Tasks](../scheduled-tasks/).
 
 * Supports NATS Contexts for connection configuration
 * Supports custom loggers, defaulting to the Go standard `log` package
+* HTTP(s) Server for access to tasks, queues and schedules
 
 ## Command line
 
