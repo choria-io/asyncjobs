@@ -203,7 +203,7 @@ var _ = Describe("Processor", func() {
 				time.Sleep(50 * time.Millisecond)
 
 				Expect(markErr).ToNot(HaveOccurred())
-				// the context was never cancelled despite running well past MaxRunTime
+				// the context was never canceled despite running well past MaxRunTime
 				Expect(ctxErr).ToNot(HaveOccurred())
 
 				task, err = client.LoadTaskByID(task.ID)

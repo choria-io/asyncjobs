@@ -304,13 +304,13 @@ func (p *processor) handle(ctx context.Context, t *Task, item *ProcessItem, to t
 	defer cancel()
 
 	// The handler gets MaxRunTime to complete, after which its context is
-	// cancelled and, server side, the JetStream lease (AckWait) expires and the
+	// canceled and, server side, the JetStream lease (AckWait) expires and the
 	// item is redelivered. A handler needing more time can call
 	// Task.MarkInProgress to extend both in lock-step: each call resets the
 	// JetStream lease and re-arms this timer for another MaxRunTime. The local
 	// window is only extended when the storage ack succeeds, so we never keep
-	// working past a lease the server has stopped honouring. There is no upper
-	// bound on extensions - a handler that keeps signalling progress keeps
+	// working past a lease the server has stopped honoring. There is no upper
+	// bound on extensions - a handler that keeps signaling progress keeps
 	// running and is responsible for its own termination.
 	deadline := time.AfterFunc(to, cancel)
 	defer deadline.Stop()
