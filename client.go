@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -312,13 +313,7 @@ func (c *Client) setTaskActive(ctx context.Context, t *Task) error {
 }
 
 func (c *Client) shouldDiscardTask(t *Task) bool {
-	for _, state := range c.opts.discard {
-		if t.State == state {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(c.opts.discard, t.State)
 }
 
 func (c *Client) saveOrDiscardTaskIfDesired(ctx context.Context, t *Task) error {

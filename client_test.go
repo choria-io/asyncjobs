@@ -205,7 +205,7 @@ var _ = Describe("Client", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			for i := 0; i < testCount; i++ {
+			for range testCount {
 				task, err := NewTask("test", map[string]string{"hello": "world"})
 				Expect(err).ToNot(HaveOccurred())
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"time"
 )
@@ -75,13 +76,7 @@ func RetryPolicyLookup(name string) (RetryPolicyProvider, error) {
 
 // IsRetryPolicyKnown determines if the named policy exist
 func IsRetryPolicyKnown(name string) bool {
-	for _, p := range RetryPolicyNames() {
-		if p == name {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(RetryPolicyNames(), name)
 }
 
 // Duration is the period to sleep for try n, it includes a jitter

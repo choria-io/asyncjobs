@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -369,13 +370,7 @@ type taskFilter struct {
 
 func (f *taskFilter) match(t *asyncjobs.Task) bool {
 	if len(f.states) > 0 {
-		hit := false
-		for _, st := range f.states {
-			if t.State == st {
-				hit = true
-				break
-			}
-		}
+		hit := slices.Contains(f.states, t.State)
 		if !hit {
 			return false
 		}

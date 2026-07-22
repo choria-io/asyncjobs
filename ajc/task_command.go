@@ -452,7 +452,7 @@ func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
 
 	if len(c.dependencies) > 0 {
 		for _, deps := range c.dependencies {
-			for _, dep := range strings.Split(deps, ",") {
+			for dep := range strings.SplitSeq(deps, ",") {
 				opts = append(opts, aj.TaskDependsOnIDs(strings.TrimSpace(dep)))
 			}
 		}

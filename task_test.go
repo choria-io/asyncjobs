@@ -166,4 +166,12 @@ var _ = Describe("Tasks", func() {
 				nil, nil, nil, nil),
 		)
 	})
+
+	Describe("MarkInProgress", func() {
+		It("Should fail when the task is not being processed by a handler", func() {
+			task, err := NewTask("ginkgo", "test")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(task.MarkInProgress(ctx)).To(MatchError(ErrInProgressNotSupported))
+		})
+	})
 })

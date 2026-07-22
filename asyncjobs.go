@@ -65,6 +65,7 @@ type Storage interface {
 	AckItem(ctx context.Context, item *ProcessItem) error
 	NakBlockedItem(ctx context.Context, item *ProcessItem) error
 	NakItem(ctx context.Context, item *ProcessItem) error
+	InProgressItem(ctx context.Context, item *ProcessItem) error
 	TerminateItem(ctx context.Context, item *ProcessItem) error
 	PollQueue(ctx context.Context, q *Queue) (*ProcessItem, error)
 	PrepareQueue(q *Queue, replicas int, memory bool) error
