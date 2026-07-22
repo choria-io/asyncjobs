@@ -125,7 +125,7 @@ var _ = Describe("Leader Election", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				wg.Add(1)
 				go worker(wg, i, "election")
 			}

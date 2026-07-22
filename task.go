@@ -5,11 +5,13 @@
 package asyncjobs
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -96,6 +98,7 @@ type Task struct {
 	Signature string `json:"signature,omitempty"`
 
 	payloadMarshaller TaskPayloadEncoderFunc
+	inProgressFunc    func(context.Context) error
 	storageOptions    any
 	mu                sync.Mutex
 }
@@ -168,6 +171,40 @@ func NewTask(taskType string, payload any, opts ...TaskOpt) (*Task, error) {
 	return t, nil
 }
 
+func (t *Task) setInProgressFunc(f func(ctx context.Context) error) {
+	t.mu.Lock()
+	t.inProgressFunc = f
+	t.mu.Unlock()
+}
+
+func (t *Task) clearInProgressFunc() {
+	t.mu.Lock()
+	t.inProgressFunc = nil
+	t.mu.Unlock()
+}
+
+// MarkInProgress requests more time to process this task. Each call resets the
+// JetStream delivery lease and extends the running handler's context deadline by
+// another MaxRunTime, keeping both in lock-step. It may be called repeatedly and
+// there is no upper bound on the total run time, so a handler relying on it is
+// responsible for eventually terminating itself.
+//
+// This is only valid while the task is being processed by a handler; calling it
+// on a task that is not currently being handled - such as one loaded via the
+// client - returns ErrInProgressNotSupported. The handler context is only
+// extended once the storage layer confirms the lease extension, otherwise the
+// storage error is returned and the deadline is left unchanged.
+func (t *Task) MarkInProgress(ctx context.Context) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.inProgressFunc == nil {
+		return ErrInProgressNotSupported
+	}
+
+	return t.inProgressFunc(ctx)
+}
+
 // IsPastDeadline determines if the task is past it's deadline
 func (t *Task) IsPastDeadline() bool {
 	return t.Deadline != nil && time.Since(*t.Deadline) > 0
@@ -234,14 +271,7 @@ func TaskDependsOnIDs(ids ...string) TaskOpt {
 		var should bool
 
 		for _, id := range ids {
-			should = true
-
-			for _, d := range t.Dependencies {
-				if d == id {
-					should = false
-					break
-				}
-			}
+			should = !slices.Contains(t.Dependencies, id)
 
 			if should {
 				t.Dependencies = append(t.Dependencies, id)

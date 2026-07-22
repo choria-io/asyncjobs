@@ -65,7 +65,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					st, _, err := newScheduledTask(fmt.Sprintf("scheduled_%d", i), "@daily", "DEFAULT", "email:new", nil)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -132,7 +132,7 @@ var _ = Describe("Storage", func() {
 				err = storage.PrepareConfigurationStore(true, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					st, _, err := newScheduledTask(fmt.Sprintf("scheduled_%d", i), "@daily", "DEFAULT", "email:new", nil)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -932,6 +932,33 @@ var _ = Describe("Storage", func() {
 
 				_, err = storage.LoadTaskByID(task.ID)
 				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		It("Should handle duplicate enqueues without panicking", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				storage, err := newJetStreamStorage(nc, retryForTesting, &defaultLogger{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = storage.PrepareTasks(true, 1, time.Hour)
+				Expect(err).ToNot(HaveOccurred())
+
+				q := testQueue()
+				err = storage.PrepareQueue(q, 1, true)
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				// first enqueue succeeds
+				Expect(storage.EnqueueTask(ctx, q, task)).ToNot(HaveOccurred())
+
+				// re-enqueuing the same task ID trips JetStream dedup; this used to
+				// panic dereferencing a nil error and must now return ErrDuplicateItem
+				err = storage.EnqueueTask(ctx, q, task)
+				Expect(err).To(MatchError(ErrDuplicateItem))
+				Expect(task.State).To(Equal(TaskStateQueueError))
+				Expect(task.LastErr).To(Equal(ErrDuplicateItem.Error()))
 			})
 		})
 	})

@@ -316,10 +316,8 @@ var _ = Describe("Router", func() {
 				stop          int32
 			)
 
-			for i := 0; i < 4; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+			for range 4 {
+				wg.Go(func() {
 					for atomic.LoadInt32(&stop) == 0 {
 						res, err := router.Handler(task)(context.Background(), &defaultLogger{}, task)
 						Expect(err).ToNot(HaveOccurred())
@@ -327,11 +325,11 @@ var _ = Describe("Router", func() {
 						atomic.AddInt64(&dispatchCount, 1)
 						readyOnce.Do(func() { close(ready) })
 					}
-				}()
+				})
 			}
 
 			<-ready
-			for i := 0; i < 50; i++ {
+			for range 50 {
 				Expect(router.Use(noop)).ToNot(HaveOccurred())
 			}
 			atomic.StoreInt32(&stop, 1)

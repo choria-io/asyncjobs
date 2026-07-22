@@ -211,7 +211,7 @@ func (c *taskCronCommand) addAction(_ *fisk.ParseContext) error {
 		return err
 	}
 
-	for _, f := range strings.Fields("yearly annually monthly weekly daily midnight hourly every") {
+	for f := range strings.FieldsSeq("yearly annually monthly weekly daily midnight hourly every") {
 		if strings.HasPrefix(c.schedule, f) {
 			c.schedule = "@" + c.schedule
 		}

@@ -262,7 +262,7 @@ func (s *jetStreamStorage) EnqueueTask(ctx context.Context, queue *Queue, task *
 	if ack.Duplicate {
 		enqueueErrorCounter.WithLabelValues(queue.Name).Inc()
 		task.State = TaskStateQueueError
-		task.LastErr = err.Error()
+		task.LastErr = ErrDuplicateItem.Error()
 		if err := s.SaveTaskState(ctx, task, true); err != nil {
 			return err
 		}
@@ -305,6 +305,20 @@ func (s *jetStreamStorage) NakBlockedItem(ctx context.Context, item *ProcessItem
 	resp := fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, defaultBlockedNakTime)
 	_, err := s.nc.RequestWithContext(timeout, msg.Reply, []byte(resp))
 
+	return err
+}
+
+func (s *jetStreamStorage) InProgressItem(ctx context.Context, item *ProcessItem) error {
+	if item.storageMeta == nil {
+		return ErrInvalidStorageItem
+	}
+
+	msg := item.storageMeta.(*nats.Msg)
+
+	timeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	_, err := s.nc.RequestWithContext(timeout, msg.Reply, api.AckProgress)
 	return err
 }
 
@@ -357,7 +371,7 @@ func (s *jetStreamStorage) PollQueue(ctx context.Context, q *Queue) (*ProcessIte
 
 	msg, err := s.nc.RequestWithContext(ctx, qc.NextSubject(), rj)
 	if err != nil {
-		if err != context.DeadlineExceeded {
+		if !errors.Is(err, context.DeadlineExceeded) {
 			s.log.Errorf("Polling failed: %v", err)
 			workQueuePollErrorCounter.WithLabelValues(q.Name).Inc()
 		}

@@ -48,6 +48,8 @@ var (
 	ErrTaskNotSigned = fmt.Errorf("task is not signed")
 	// ErrTaskSignatureInvalid indicates a signature did not pass validation
 	ErrTaskSignatureInvalid = fmt.Errorf("invalid task signature")
+	// ErrInProgressNotSupported indicates MarkInProgress was called on a task that is not currently being processed by a handler
+	ErrInProgressNotSupported = fmt.Errorf("task is not being processed by a handler")
 
 	// ErrNoHandlerForTaskType indicates that a task could not be handled by any known handlers
 	ErrNoHandlerForTaskType = fmt.Errorf("no handler for task type")

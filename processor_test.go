@@ -153,6 +153,81 @@ var _ = Describe("Processor", func() {
 				Expect(string(msg.Data)).To(Equal("+ACK"))
 			})
 		})
+
+		It("Should extend the handler deadline and lease when MarkInProgress is called", func() {
+			withJetStream(func(nc *nats.Conn, _ *jsm.Manager) {
+				// Short MaxRunTime so the handler runs several times past it while
+				// heartbeating, proving both the JetStream lease and the handler
+				// context are extended.
+				queue := &Queue{Name: "DEFAULT", MaxRunTime: 500 * time.Millisecond, MaxTries: 100, MaxConcurrent: DefaultQueueMaxConcurrent}
+				client, err := NewClient(NatsConn(nc), WorkQueue(queue))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(client.setupStreams()).ToNot(HaveOccurred())
+				Expect(client.setupQueues()).ToNot(HaveOccurred())
+
+				task, err := NewTask("ginkgo", "test")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(ctx, task)).ToNot(HaveOccurred())
+
+				var (
+					markErr error
+					ctxErr  error
+				)
+				done := make(chan struct{})
+
+				router := NewTaskRouter()
+				router.HandleFunc("ginkgo", func(hctx context.Context, _ Logger, t *Task) (any, error) {
+					defer close(done)
+
+					// Run ~1.2s under a 500ms MaxRunTime, heartbeating within the window.
+					for range 8 {
+						time.Sleep(150 * time.Millisecond)
+						if err := t.MarkInProgress(hctx); err != nil {
+							markErr = err
+							break
+						}
+					}
+
+					ctxErr = hctx.Err()
+					return "done", nil
+				})
+
+				// intercept the acks, we expect progress signals followed by a final +ACK
+				sub, err := nc.SubscribeSync("$JS.ACK.CHORIA_AJ_Q_DEFAULT.WORKERS.>")
+				Expect(err).ToNot(HaveOccurred())
+
+				go client.Run(ctx, router)
+
+				<-done
+				time.Sleep(50 * time.Millisecond)
+
+				Expect(markErr).ToNot(HaveOccurred())
+				// the context was never canceled despite running well past MaxRunTime
+				Expect(ctxErr).ToNot(HaveOccurred())
+
+				task, err = client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(task.State).To(Equal(TaskStateCompleted))
+				Expect(task.Tries).To(Equal(1))
+
+				var sawProgress, sawAck bool
+				for i := 0; i < 20 && !sawAck; i++ {
+					msg, err := sub.NextMsg(time.Second)
+					if err != nil {
+						break
+					}
+					switch string(msg.Data) {
+					case "+WPI":
+						sawProgress = true
+					case "+ACK":
+						sawAck = true
+					}
+				}
+				Expect(sawProgress).To(BeTrue())
+				Expect(sawAck).To(BeTrue())
+			})
+		})
 	})
 
 	Describe("processMessage", func() {
