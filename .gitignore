@@ -5,3 +5,4 @@ dist
 docs/public
 CLAUDE.md
 spec/
+*.test
