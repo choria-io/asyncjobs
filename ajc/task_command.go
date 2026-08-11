@@ -183,6 +183,14 @@ func (c *taskCommand) initAction(_ *fisk.ParseContext) error {
 		return err
 	}
 
+	// The configuration and leader election buckets are storage too, and a client
+	// told not to create storage will not make them either. Provisioning them here
+	// means this one command leaves a cluster a consumer can actually bind to.
+	err = admin.PrepareConfigurationStore(c.memory, c.replicas)
+	if err != nil {
+		return err
+	}
+
 	nfo, err := admin.TasksInfo()
 	if err != nil {
 		return err
