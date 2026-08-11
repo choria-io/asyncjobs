@@ -25,6 +25,7 @@ type ClientOpts struct {
 	statsPort              int
 	logger                 Logger
 	skipPrepare            bool
+	noStorageCreate        bool
 	discard                []TaskState
 	privateKey             ed25519.PrivateKey
 	seedFile               string
@@ -86,10 +87,31 @@ func DiscardTaskStatesByName(states ...string) ClientOpt {
 	}
 }
 
-// NoStorageInit skips setting up any queues or task stores when creating a client
+// NoStorageInit skips setting up any queues or task stores when creating a client.
+//
+// It skips the binding as well as the creation, so the resulting client cannot load
+// or save a task and is only useful to a caller that goes on to prepare the storage
+// itself. A consumer that wants the operator to own the storage layout wants
+// NoStorageCreate instead.
 func NoStorageInit() ClientOpt {
 	return func(opts *ClientOpts) error {
 		opts.skipPrepare = true
+		return nil
+	}
+}
+
+// NoStorageCreate binds to the task store and its configuration buckets but never
+// creates them, failing instead when they are absent. It is the task-store
+// counterpart of the Queue NoCreate setting, so a client with both binds to
+// everything and creates nothing.
+//
+// It is what a long-lived consumer should use. Left off, the first worker to start
+// against an unprovisioned cluster silently decides how every task is stored, at one
+// replica and with the retention it happens to be built with, which is the operator's
+// decision rather than a worker's.
+func NoStorageCreate() ClientOpt {
+	return func(opts *ClientOpts) error {
+		opts.noStorageCreate = true
 		return nil
 	}
 }

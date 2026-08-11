@@ -78,6 +78,10 @@ type jetStreamStorage struct {
 	qStreams   map[string]*jsm.Stream
 	qConsumers map[string]*jsm.Consumer
 
+	// noCreate binds to the task store and its buckets rather than creating them,
+	// set from the NoStorageCreate client option.
+	noCreate bool
+
 	log Logger
 
 	mu sync.Mutex
@@ -769,6 +773,9 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 	}
 
 	kv, err := s.js.KeyValue(ctx, ConfigBucketName)
+	if errors.Is(err, jetstream.ErrBucketNotFound) && s.noCreate {
+		return fmt.Errorf("%w: bucket %s does not exist, create it with 'ajc tasks initialize'", ErrStorageNotReady, ConfigBucketName)
+	}
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		kv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 			Bucket:      ConfigBucketName,
@@ -784,6 +791,9 @@ func (s *jetStreamStorage) PrepareConfigurationStore(memory bool, replicas int) 
 	s.configBucket = kv
 
 	ekv, err := s.js.KeyValue(ctx, LeaderElectionBucketName)
+	if errors.Is(err, jetstream.ErrBucketNotFound) && s.noCreate {
+		return fmt.Errorf("%w: bucket %s does not exist, create it with 'ajc tasks initialize'", ErrStorageNotReady, LeaderElectionBucketName)
+	}
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		ekv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 			Bucket:      LeaderElectionBucketName,
@@ -826,6 +836,22 @@ func (s *jetStreamStorage) PrepareTasks(memory bool, replicas int, retention tim
 	opts = append(opts, jsm.MaxAge(retention))
 
 	s.tasks = &taskStorage{mgr: s.mgr}
+
+	// Binding rather than creating is the NoStorageCreate client option, the
+	// counterpart of a Queue's NoCreate: the operator owns the layout, so an absent
+	// store is their omission to fix rather than ours to guess at.
+	if s.noCreate {
+		s.tasks.stream, err = s.mgr.LoadStream(TasksStreamName)
+		if err != nil {
+			if jsm.IsNatsError(err, 10059) {
+				return fmt.Errorf("%w: stream %s does not exist, create it with 'ajc tasks initialize'", ErrStorageNotReady, TasksStreamName)
+			}
+			return err
+		}
+
+		return nil
+	}
+
 	s.tasks.stream, err = s.mgr.LoadOrNewStream(TasksStreamName, opts...)
 	if err != nil {
 		return err
