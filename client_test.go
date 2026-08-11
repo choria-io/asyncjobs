@@ -71,6 +71,41 @@ var _ = Describe("Client", func() {
 		log.SetOutput(GinkgoWriter)
 	})
 
+	Describe("NoStorageCreate", func() {
+		It("Should refuse to create the task store and say how to make it", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				_, err := NewClient(NatsConn(nc), NoStorageCreate())
+				Expect(err).To(MatchError(ErrStorageNotReady))
+				Expect(err.Error()).To(ContainSubstring(TasksStreamName))
+				Expect(err.Error()).To(ContainSubstring("ajc tasks initialize"))
+
+				known, err := mgr.IsKnownStream(TasksStreamName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(known).To(BeFalse(), "nothing was created on the way to failing")
+			})
+		})
+
+		// Binding an existing store is the whole point: a worker joins what the
+		// operator provisioned and still loads and saves tasks through it.
+		It("Should bind storage that already exists", func() {
+			withJetStream(func(nc *nats.Conn, mgr *jsm.Manager) {
+				_, err := NewClient(NatsConn(nc))
+				Expect(err).ToNot(HaveOccurred())
+
+				client, err := NewClient(NatsConn(nc), NoStorageCreate())
+				Expect(err).ToNot(HaveOccurred())
+
+				task, err := NewTask("x", nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(client.EnqueueTask(context.Background(), task)).ToNot(HaveOccurred())
+
+				loaded, err := client.LoadTaskByID(task.ID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(loaded.ID).To(Equal(task.ID))
+			})
+		})
+	})
+
 	Describe("SignedTasks", func() {
 		var pubk ed25519.PublicKey
 		var prik ed25519.PrivateKey

@@ -53,10 +53,13 @@ func NewClient(opts ...ClientOpt) (*Client, error) {
 	}
 
 	c := &Client{opts: copts, log: copts.logger}
-	c.storage, err = newJetStreamStorage(copts.nc, copts.retryPolicy, c.log)
+
+	storage, err := newJetStreamStorage(copts.nc, copts.retryPolicy, c.log)
 	if err != nil {
 		return nil, err
 	}
+	storage.noCreate = copts.noStorageCreate
+	c.storage = storage
 
 	if c.opts.queue == nil {
 		c.opts.queue = newDefaultQueue()
