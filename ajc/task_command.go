@@ -8,7 +8,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +25,8 @@ type taskCommand struct {
 	id              string
 	ttype           string
 	payload         string
+	payloadJSON     string
+	payloadFile     string
 	queue           string
 	deadline        time.Duration
 	maxtries        int
@@ -56,7 +60,9 @@ func configureTaskCommand(app *fisk.Application) {
 
 	add := tasks.Command("add", "Adds a new Task to a queue").Alias("new").Alias("a").Alias("enqueue").Action(c.addAction)
 	add.Arg("type", "The task type").Required().StringVar(&c.ttype)
-	add.Arg("payload", "The task Payload").Required().StringVar(&c.payload)
+	add.Arg("payload", "The task Payload, stored as a JSON string").StringVar(&c.payload)
+	add.Flag("payload-json", "The task Payload as a JSON document").PlaceHolder("JSON").StringVar(&c.payloadJSON)
+	add.Flag("payload-file", "Reads the task Payload as a JSON document from a file").PlaceHolder("FILE").ExistingFileVar(&c.payloadFile)
 	add.Flag("queue", "The name of the queue to add the task to").Short('q').Default("DEFAULT").StringVar(&c.queue)
 	add.Flag("deadline", "A duration to determine when the latest time that a task handler will be called").DurationVar(&c.deadline)
 	add.Flag("tries", "Sets the maximum amount of times this task may be tried").IntVar(&c.maxtries)
@@ -439,8 +445,67 @@ func (c *taskCommand) viewAction(_ *fisk.ParseContext) error {
 	return nil
 }
 
+// taskPayload resolves the payload from whichever of the three sources was given.
+//
+// The positional argument is stored as a JSON string, which is what this command has
+// always done and what a handler expecting a string still receives. The JSON sources
+// store the document itself, and json.RawMessage is what makes that difference: NewTask
+// marshals whatever it is handed, so a string is re-quoted and a []byte is base64
+// encoded, and only a RawMessage is embedded as it was written.
+func (c *taskCommand) taskPayload() (any, error) {
+	given := 0
+	for _, s := range []string{c.payload, c.payloadJSON, c.payloadFile} {
+		if s != "" {
+			given++
+		}
+	}
+
+	switch {
+	case given == 0:
+		return nil, fmt.Errorf("a payload is required: pass one as an argument to store a JSON string, or use --payload-json or --payload-file to store a JSON document")
+	case given > 1:
+		return nil, fmt.Errorf("only one of the payload argument, --payload-json or --payload-file may be given")
+	}
+
+	body := c.payloadJSON
+
+	if c.payloadFile != "" {
+		f, err := os.ReadFile(c.payloadFile)
+		if err != nil {
+			return nil, err
+		}
+		body = string(f)
+	}
+
+	if body != "" {
+		if !json.Valid([]byte(body)) {
+			return nil, fmt.Errorf("payload is not valid JSON")
+		}
+
+		return json.RawMessage(body), nil
+	}
+
+	// A document passed positionally is stored as a string, and nothing downstream can
+	// tell that apart from a string that was meant. Saying so here is the only point at
+	// which it is still cheap to notice; the alternative is a handler that cannot decode
+	// its own payload some time later.
+	trimmed := strings.TrimSpace(c.payload)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		fmt.Println("WARNING: the payload is being stored as a JSON string, use --payload-json to store it as a document")
+	}
+
+	return c.payload, nil
+}
+
 func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
-	err := c.prepare(aj.BindWorkQueue(c.queue))
+	// Resolved before the connection, so a mistake in the arguments is reported without
+	// needing a reachable queue to find out about it.
+	payload, err := c.taskPayload()
+	if err != nil {
+		return err
+	}
+
+	err = c.prepare(aj.BindWorkQueue(c.queue))
 	if err != nil {
 		return err
 	}
@@ -466,7 +531,7 @@ func (c *taskCommand) addAction(_ *fisk.ParseContext) error {
 		opts = append(opts, aj.TaskMaxTries(c.maxtries))
 	}
 
-	task, err := aj.NewTask(c.ttype, c.payload, opts...)
+	task, err := aj.NewTask(c.ttype, payload, opts...)
 	if err != nil {
 		return err
 	}
